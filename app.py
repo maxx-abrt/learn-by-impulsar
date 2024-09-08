@@ -378,8 +378,8 @@ def main():
     
     if 'logged_in' not in st.session_state:
      st.session_state.logged_in = False
-     st.write("Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des quiz communautaires, et s'entraider dans le domaine de la santé ! *Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
-     st.write(f":blue-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !]")
+     st.write(f"Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des quiz communautaires, et s'entraider dans le domaine de la santé ! *Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
+     st.write(f":blue-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !] **Aussi, une fois dedans, vous accéderez au menu déroulant dans la sidebar en cliquant sur : ➤ en haut à gauche de votre écran**")
     if st.session_state.logged_in:
      username = get_account_details(st.session_state.username)
      st.success(f"Bienvenue, vous êtes connecté en tant que **{st.session_state.username}**")
