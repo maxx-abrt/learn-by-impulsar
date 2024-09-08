@@ -305,10 +305,7 @@ def main():
                 leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
                 st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
 
-footer_html = """<div style='text-align: bottom;'>
-  <p>Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍</p>
-</div>"""
-st.markdown(footer_html, unsafe_allow_html=True)
+st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
 
 if __name__ == "__main__":
     main()
