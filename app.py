@@ -17,7 +17,7 @@ hide_streamlit_style = """
     #MainMenu {visibility: hidden;}  /* Cache le menu hamburger */
     footer {visibility: hidden;}  /* Cache le footer */
     .viewerBadge_container__1QSob {display: none;} /* Cache le bouton "fort" */
-    .viewerBadge_link__qRIco {display: none;}
+    .viewerBadge_container__qRIco {display: none;}
     .stActionButton {visibility: hidden;}  /* Cache le bouton GitHub si présent */
     .stFooter {visibility: hidden;}  /* Cache le bouton "Posted with Streamlit" */
     </style>
