@@ -178,7 +178,7 @@ def display_public_profile(username):
 
 def main():
     st.title("Quiz Anatomie")
-    st.write("Cliquez sur la flèche ➤ en haut à gauche pour ouvrir la barre de contrôle et vous créer un compte, vous connecter ou découvrir en tant qu'invité !")
+    st.write(f":red[Cliquez sur la flèche ➤ en haut à gauche] pour ouvrir la barre de contrôle et vous créer un compte, vous connecter ou découvrir en tant qu'invité !")
     
     # Initialisation de st.session_state.username
     if "username" not in st.session_state:
