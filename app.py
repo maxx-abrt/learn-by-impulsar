@@ -9,7 +9,10 @@ import datetime
 
 
 
-
+footer_html = """<div style='text-align: center;'>
+  <p>Développé avec ❤️ par max aubert en python</p>
+</div>"""
+st.markdown(footer_html, unsafe_allow_html=True)
 
 # Charger les données des questions depuis le fichier JSON
 with open('questions_data.json', 'r') as f:
