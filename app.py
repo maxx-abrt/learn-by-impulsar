@@ -7,14 +7,20 @@ import pandas as pd  # Assurez-vous que pandas est importé
 import datetime
 from community_questions import load_community_questions, add_community_question
 import requests
-
+from dotenv import load_dotenv
+import os
 
 COOLDOWN_TIME = 15
 
 
-# Configuration de l'API de Brevo
-brevo_api_key = "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"  # Remplacez par votre clé API de Brevo
-brevo_api_url = "https://api.brevo.com/v3/smtp/email"
+
+
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
+
+# Configuration de l'API de Brevo depuis les variables d'environnement
+brevo_api_key = os.getenv("BREVO_API_KEY")
+brevo_api_url = os.getenv("BREVO_API_URL")
 
 def send_email(name, email, message):
     headers = {
