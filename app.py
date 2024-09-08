@@ -4,20 +4,11 @@ import json
 import hashlib
 import time
 import pandas as pd  # Assurez-vous que pandas est importé
-from streamlit_javascript import st_javascript
 
 import datetime
 
 
 
-def set_cookie(key, value, expire_days=2):
-    expires = datetime.datetime.utcnow() + datetime.timedelta(days=expire_days)
-    st_javascript(f"document.cookie = '{key}={value}; expires={expires.strftime('%a, %d %b %Y %H:%M:%S GMT')}; path=/';")
-
-def get_cookie(key):
-    cookies = st_javascript("return document.cookie;")
-    cookie_dict = dict(x.split('=') for x in cookies.split('; ') if '=' in x)
-    return cookie_dict.get(key, None)
 
 
 # Charger les données des questions depuis le fichier JSON
