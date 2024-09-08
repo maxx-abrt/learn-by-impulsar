@@ -16,6 +16,36 @@ COOLDOWN_TIME = 15
 
 
 
+def show_login_page():
+    st.header("Connexion")
+
+    # Formulaire de connexion
+    username = st.text_input("Nom d'utilisateur (connexion)")
+    password = st.text_input("Mot de passe (connexion)", type="password")
+    login_button = st.button(":green[Se connecter]")
+
+    st.header("Inscription")
+    # Formulaire d'inscription
+    register_username = st.text_input("Nom d'utilisateur (inscription)")
+    register_password = st.text_input("Mot de passe (inscription)", type="password")
+    register_button = st.button(":blue[S'inscrire]")
+
+    if login_button:
+        if authenticate_user(username, password):
+            st.success("Connexion réussie !")
+            st.session_state.logged_in = True  # Mettre à jour l'état
+            st.session_state.username = username  # Stocker l'utilisateur connecté
+            st.rerun()  # Recharger la page pour afficher la page principale
+        else:
+            st.error("Identifiants incorrects.")
+
+    if register_button:
+        if register_user(register_username, register_password):
+            st.success("Inscription réussie ! Vous pouvez maintenant vous connecter.")
+        else:
+            st.error("Erreur lors de l'inscription.")
+
+
 
 def load_community_questions():
     with open('community_questions.json', 'r') as f:
@@ -38,6 +68,7 @@ def get_last_submission_time(username):
     conn.close()
     return last_submission_time
 
+COOLDOWN_TIME = 5
 
 def update_cooldown():
     if "last_submission_time" not in st.session_state:
@@ -63,14 +94,14 @@ def display_cooldown():
             update_cooldown()
             
             if st.session_state.can_submit:
-                countdown_placeholder.write("Vous pouvez soumettre à nouveau !")
+                countdown_placeholder.write("*Vous pouvez soumettre un nouveau quizz !*")
             else:
-                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans :blue[{st.session_state.time_remaining}] secondes. ***(timer mis en place pour éviter le spam)***")
+                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans {st.session_state.time_remaining} secondes.")
             
             # Met à jour toutes les 1 seconde
             time.sleep(1)
     else:
-        st.write("Vous pouvez soumettre à nouveau !")  
+        st.write("Vous pouvez soumettre un nouveau quizz !")  
 # Définir le cooldown en secondes
 
 
@@ -249,8 +280,8 @@ def display_public_profile(username):
 
 
 def main():
-    st.title("Quiz Anatomie")
-    st.write(f":red[Cliquez sur la flèche ➤ en haut à gauche] pour ouvrir la barre de contrôle et vous créer un compte, vous connecter ou découvrir en tant qu'invité !")
+    st.title("Apprentissage collaboratif")
+    
     
     # Initialisation de st.session_state.username
     if "username" not in st.session_state:
@@ -270,6 +301,19 @@ def main():
             st.experimental_rerun()
         else:
             cookie_username = None
+            
+    
+    if 'logged_in' not in st.session_state:
+     st.session_state.logged_in = False
+     st.write(f":red-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !]")
+    if st.session_state.logged_in:
+     username = get_account_details(st.session_state.username)
+     st.success(f"Bienvenue, vous êtes connecté en tant que **{st.session_state.username}**")
+    # Afficher la page principale (Quiz, etc.)
+      # Assurez-vous d'avoir une fonction pour la page principale
+    else:
+     
+     show_login_page()  # Affichez le formulaire de connexion ou d'inscription
 
     # Afficher le leaderboard avant connexion
     if not st.session_state.username:
@@ -281,44 +325,8 @@ def main():
         st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
         
         # Barre latérale avec options de connexion et d'inscription
-        with st.sidebar:
-            st.header("Connexion / Inscription")
-            choice = st.radio("Choisissez une action", ["Connexion", "Inscription"])
-            
-            if choice == "Inscription":
-                st.subheader("Inscription")
-                username = st.text_input("Nom d'utilisateur")
-                password = st.text_input("Mot de passe", type="password")
-                remember_me = st.checkbox("Se rappeler de moi")
-                
-                if st.button("S'inscrire"):
-                    if register_user(username, password):
-                        st.success("Inscription réussie! Vous serez redirigé vers la page de quiz.")
-                        st.session_state.username = username
-                        st.experimental_rerun()
-                    else:
-                        st.error("Nom d'utilisateur déjà pris.")
-            
-            elif choice == "Connexion":
-                st.subheader("Connexion")
-                username = st.text_input("Nom d'utilisateur", key="login")
-                password = st.text_input("Mot de passe", type="password", key="password")
-                remember_me = st.checkbox("Se rappeler de moi")
-                
-                if st.button("Se connecter"):
-                    if authenticate_user(username, password):
-                        st.success("Connexion réussie! Vous serez redirigé vers la page de quiz.")
-                        st.session_state.username = username
-                        st.write("Redirection en cours...")
-                    else:
-                        st.error("Identifiants incorrects.")
         
-            if not st.session_state.username:
-                # Connexion en tant qu'invité
-                if st.button("Se connecter en tant qu'invité"):
-                    st.session_state.username = "invité"
-                    st.success("Vous êtes connecté en tant qu'invité.")
-                    st.write("Redirection en cours...")
+        
 
     # Partie principale (contenu du quiz et des questions) au centre de la page
     if st.session_state.username:
@@ -330,7 +338,7 @@ def main():
         
         if menu_option == "Déconnexion":
             st.session_state.username = None
-            st.success("Vous êtes déconnecté. Vous serez redirigé vers la page de connexion.")
+            st.success("Vous êtes déconnecté. ***:red[Veuillez recharger cette page une fois la déconnexion faite ! (avec f5 ou en swipant en haut)]***")
             st.write("Redirection en cours...")
         
         elif menu_option == "Quiz":
@@ -352,7 +360,7 @@ def main():
 
                 # Vérification s'il y a des questions disponibles
             if questions:
-                    st.write(f"### Questions chargées depuis la communauté pour {sub_system_choice} du {system_choice} :")
+                    st.write(f"##### Questions chargées depuis la base de données  : :blue[{sub_system_choice}] - :blue[{system_choice}] :")
                     
                     # Boucle sur les questions de la communauté pour les afficher
 
