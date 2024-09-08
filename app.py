@@ -4,7 +4,7 @@ import json
 import hashlib
 import time
 import pandas as pd  # Assurez-vous que pandas est importé
-from streamlit_javascript import st_javascript
+
 
 import datetime
 
