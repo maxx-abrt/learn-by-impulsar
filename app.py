@@ -222,8 +222,6 @@ def main():
                     if register_user(username, password):
                         st.success("Inscription réussie! Vous serez redirigé vers la page de quiz.")
                         st.session_state.username = username
-                        if remember_me:
-                            st_javascript(f"document.cookie = 'username={username}; path=/; expires=Thu, 01 Jan 2025 00:00:00 GMT';")
                         st.experimental_rerun()
                     else:
                         st.error("Nom d'utilisateur déjà pris.")
@@ -238,8 +236,6 @@ def main():
                     if authenticate_user(username, password):
                         st.success("Connexion réussie! Vous serez redirigé vers la page de quiz.")
                         st.session_state.username = username
-                        if remember_me:
-                            st_javascript(f"document.cookie = 'username={username}; path=/; expires=Thu, 01 Jan 2025 00:00:00 GMT';")
                         st.experimental_rerun()
                     else:
                         st.error("Identifiants incorrects.")
@@ -261,7 +257,6 @@ def main():
         
         if menu_option == "Déconnexion":
             st.session_state.username = None
-            st_javascript("document.cookie = 'username=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';")
             st.success("Vous êtes déconnecté. Vous serez redirigé vers la page de connexion.")
             st.experimental_rerun()
         
