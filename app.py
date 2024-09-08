@@ -65,7 +65,7 @@ def display_cooldown():
             if st.session_state.can_submit:
                 countdown_placeholder.write("Vous pouvez soumettre à nouveau !")
             else:
-                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans {st.session_state.time_remaining} secondes.")
+                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans {st.session_state.time_remaining} secondes. (timer mis en place pour éviter le spam)")
             
             # Met à jour toutes les 1 seconde
             time.sleep(1)
