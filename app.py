@@ -236,7 +236,7 @@ def main():
                     if authenticate_user(username, password):
                         st.success("Connexion réussie! Vous serez redirigé vers la page de quiz.")
                         st.session_state.username = username
-                        st.experimental_rerun()
+                        st.write("Redirection en cours...")
                     else:
                         st.error("Identifiants incorrects.")
         
