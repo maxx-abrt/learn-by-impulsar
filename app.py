@@ -6,13 +6,100 @@ import time
 import pandas as pd  # Assurez-vous que pandas est importé
 import datetime
 from community_questions import load_community_questions, add_community_question
+import requests
 
 
 COOLDOWN_TIME = 15
 
 
+# Configuration de l'API de Brevo
+brevo_api_key = "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"  # Remplacez par votre clé API de Brevo
+brevo_api_url = "https://api.brevo.com/v3/smtp/email"
 
-
+def send_email(name, email, message):
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": brevo_api_key
+    }
+    
+    data = {
+        "sender": {"email": "maxaubert17@gmail.com", "name": "Formulaire de contact"},
+        "to": [{"email": "maxaubert17@gmail.com", "name": "Max Aubert"}],
+        "cc": [{"email": email, "name": name}],  # Ajoute l'adresse e-mail de l'utilisateur en copie
+        "subject": "Message depuis votre formulaire de contact",
+        "htmlContent": f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }}
+                .container {{
+                    width: 80%;
+                    margin: auto;
+                    background-color: #ffffff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }}
+                h1 {{
+                    color: #4CAF50;
+                }}
+                .section {{
+                    margin-bottom: 20px;
+                }}
+                .section-title {{
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #333;
+                }}
+                .section-content {{
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    background-color: #fafafa;
+                }}
+                .footer {{
+                    font-size: 12px;
+                    color: #777;
+                    text-align: center;
+                    margin-top: 20px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Formulaire de Contact</h1>
+                <div class="section">
+                    <div class="section-title">Informations de l'utilisateur</div>
+                    <div class="section-content">
+                        <p><strong>Nom:</strong> {name}</p>
+                        <p><strong>Email:</strong> {email}</p>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="section-title">Message</div>
+                    <div class="section-content">
+                        <p>{message}</p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>Ce message a été envoyé depuis le formulaire de contact du site de quiz collaboratif.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    }
+    
+    response = requests.post(brevo_api_url, headers=headers, json=data)
+    
+    return response.status_code == 201
 
 
 
@@ -68,7 +155,6 @@ def get_last_submission_time(username):
     conn.close()
     return last_submission_time
 
-COOLDOWN_TIME = 5
 
 def update_cooldown():
     if "last_submission_time" not in st.session_state:
@@ -96,7 +182,7 @@ def display_cooldown():
             if st.session_state.can_submit:
                 countdown_placeholder.write("*Vous pouvez soumettre un nouveau quizz !*")
             else:
-                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans {st.session_state.time_remaining} secondes.")
+                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans **:blue[{st.session_state.time_remaining}]** secondes.")
             
             # Met à jour toutes les 1 seconde
             time.sleep(1)
@@ -287,25 +373,12 @@ def main():
     if "username" not in st.session_state:
         st.session_state.username = None
 
-    # Récupérer les cookies
-    cookie_username = None
-    if st.session_state.username:
-        cookie_username = st.session_state.username
-    else:
-        cookies = st.experimental_get_query_params()
-        cookie_username = cookies.get("username", [None])[0]
-    
-    if cookie_username:
-        if authenticate_user(cookie_username, "dummy_password"):
-            st.session_state.username = cookie_username
-            st.experimental_rerun()
-        else:
-            cookie_username = None
+
             
     
     if 'logged_in' not in st.session_state:
      st.session_state.logged_in = False
-     st.write(f":red-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !]")
+     st.write(f":blue-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !]")
     if st.session_state.logged_in:
      username = get_account_details(st.session_state.username)
      st.success(f"Bienvenue, vous êtes connecté en tant que **{st.session_state.username}**")
@@ -333,7 +406,7 @@ def main():
         with st.sidebar:
             menu_option = st.selectbox(
                 "Menu",
-                ["Quiz", "Voir mon compte", "Contribuer aux questions", "Déconnexion"]
+                ["Quiz", "Voir mon compte", "Contribuer aux questions", "Déconnexion", "Contacter le développeur"]
             )
         
         if menu_option == "Déconnexion":
@@ -409,47 +482,131 @@ def main():
                 leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
                 st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
 
-st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
+        elif menu_option == "Contacter le développeur":
+         show_contact_page()
+    
+    
+    st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
+
+
+def show_contact_page():
+    st.header("Contacter le Développeur")
+    
+    # Affichage du cooldown
+    display_cooldown()
+    
+    if st.session_state.can_submit:
+        with st.form(key='contact_form'):
+            name = st.text_input("Nom")
+            email = st.text_input("Email")
+            message = st.text_area("Message")
+            submit_button = st.form_submit_button(label="Envoyer")
+            
+            if submit_button:
+                if send_email(name, email, message):
+                    st.success("Votre message a été envoyé avec succès !")
+                    update_last_submission_time(st.session_state.username)
+                    st.session_state.can_submit = False  # Désactiver la soumission jusqu'au prochain cooldown
+                else:
+                    st.error("Erreur lors de l'envoi de votre message. Veuillez réessayer.")
+    else:
+        st.write("Vous devez attendre avant de pouvoir soumettre à nouveau.")
+
+
 
 def contribute_questions():
-    question_type = st.selectbox("Type de question", ["mcq", "vrai_ou_faux", "fill_in"])
+    # Initialisation des valeurs dans st.session_state si elles n'existent pas déjà
+    if 'question' not in st.session_state:
+        st.session_state['question'] = ""
+    if 'options' not in st.session_state:
+        st.session_state['options'] = ["", "", "", ""]
+    if 'correct_answers' not in st.session_state:
+        st.session_state['correct_answers'] = []
+    if 'answer' not in st.session_state:
+        st.session_state['answer'] = ""
+
+    def check_form_filled():
+        # Vérifie si n'importe quel champ a du texte
+        return (st.session_state['question'].strip() or
+                any(opt.strip() for opt in st.session_state['options']) or
+                st.session_state['answer'].strip() or
+                st.session_state['correct_answers'])
+
+    question_type = st.radio(
+        "Type de question",
+        ["mcq", "vrai_ou_faux", "fill_in"],
+        index=["mcq", "vrai_ou_faux", "fill_in"].index(st.session_state.get('question_type', 'mcq')),
+        format_func=lambda x: {
+            "mcq": ":blue[Question QCM] : choix multiple",
+            "vrai_ou_faux": ":blue[Question vrai ou faux] : choix entre les deux",
+            "fill_in": ":blue[Question quizz] : remplir la réponse avec du texte"
+        }[x]
+    )
+    st.session_state['question_type'] = question_type
+
     system = st.selectbox("Système", list(questions_data.keys()))
     subsystem = st.selectbox("Sous-système", list(questions_data[system].keys()))
-    
-    question = st.text_input("Question")
-    
+
+    # Champ de texte pour la question
+    question = st.text_input("Question", value=st.session_state['question'])
+    st.session_state['question'] = question
+
     if question_type == "mcq":
+        # Options de réponse pour les questions à choix multiples
         options = []
         for i in range(4):
-            option = st.text_input(f"Option {i+1}")
+            option = st.text_input(f"Option {i+1}", value=st.session_state['options'][i], key=f"option_{i+1}")
             options.append(option)
+        st.session_state['options'] = options
+        
+        # Réponses correctes pour les questions à choix multiples
         correct_answers = st.multiselect("Réponse(s) correcte(s)", options)
+        st.session_state['correct_answers'] = correct_answers
         
         question_data = {
-            "question": question,
-            "options": options,
+            "question": st.session_state['question'],
+            "options": st.session_state['options'],
             "answer": correct_answers
         }
     
     elif question_type == "vrai_ou_faux":
-        answer = st.radio("Réponse correcte", ["Vrai", "Faux"])
+        # Radio buttons pour les réponses vrai ou faux
+        selected_answer = st.radio("Réponse correcte", ["Vrai", "Faux"], key='answer')
         
         question_data = {
-            "question": question,
+            "question": st.session_state['question'],
+            "answer": selected_answer
+        }
+    
+    elif question_type == "fill_in":
+        # Champ de texte pour la réponse à remplir
+        answer = st.text_input("Remplir la réponse", value=st.session_state['answer'], key='fill_in')
+        
+        question_data = {
+            "question": st.session_state['question'],
             "answer": answer
         }
     
-    else:  # Quiz
-        answer = st.text_input("fill_in")
-        
-        question_data = {
-            "question": question,
-            "answer": answer
-        }
+    # Activation du bouton de soumission seulement si un des champs est rempli
+    submit_button = st.button(
+        ":green[Envoyer ma question]",
+        disabled=not check_form_filled()
+    )
     
-    if st.button("Valider ma question"):
+    if submit_button and check_form_filled():
         add_community_question(system, subsystem, question_type.lower().replace(" ", "_"), question_data)
         st.success("Votre question a été ajoutée avec succès!")
+
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 def save_user_answers(username, question_id, answer, is_correct):
     conn = get_db_connection()

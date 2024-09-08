@@ -55,6 +55,14 @@ def init_db():
         FOREIGN KEY (username) REFERENCES users (username)
     )
 ''')
+    
+    c.execute('''
+    CREATE TABLE user_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+    );
+   ''')
 
     
     

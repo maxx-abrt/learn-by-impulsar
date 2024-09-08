@@ -2,49 +2,68 @@
   "Syst\u00e8me osseux": {
     "Cr\u00e2ne": [
       {
-        "type": "vrai_ou_faux",
-        "question": "Le cr\u00e2ne humain est compos\u00e9 de 22 os.",
+        "type": "fill_in",
+        "question": "test",
         "answer": "Vrai"
       },
       {
-        "type": "fill_in",
-        "question": "tes",
-        "answer": "test"
+        "type": "mcq",
+        "question": "fee",
+        "options": [
+          "Premi\u00e8re option",
+          "",
+          "",
+          "test"
+        ],
+        "answer": [
+          "Premi\u00e8re option"
+        ]
       }
     ],
-    "Colonne vert\u00e9brale": [
-      {
-        "type": "mcq",
-        "question": "Combien de vert\u00e8bres composent la colonne vert\u00e9brale humaine ?",
-        "options": [
-          "24",
-          "26",
-          "33",
-          "29"
-        ],
-        "answer": "33"
-      },
-      {
-        "type": "fill_in",
-        "question": "La premi\u00e8re vert\u00e8bre cervicale est appel\u00e9e _____",
-        "answer": "Atlas"
-      }
-    ]
+    "Colonne vert\u00e9brale": []
   },
   "Syst\u00e8me respiratoire": {
     "Poumons": [
+      {}
+    ]
+  },
+  "Syst\u00e8me circulatoire": {
+    "Vaisseaux sanguins": [
       {
         "type": "mcq",
-        "question": "Combien de lobes les poumons ont-ils ?",
+        "question": "Test",
         "options": [
-          "1",
-          "2",
-          "3",
-          "4"
+          "Premi\u00e8re option",
+          "",
+          "",
+          "test"
         ],
         "answer": [
-          "2"
+          "Premi\u00e8re option"
         ]
+      }
+    ],
+    "C\u0153ur": [
+      {
+        "type": "mcq",
+        "question": "test",
+        "options": [
+          "Premi\u00e8re option",
+          "",
+          "",
+          "test"
+        ],
+        "answer": []
+      },
+      {
+        "type": "fill_in",
+        "question": "test",
+        "answer": "test"
+      },
+      {
+        "type": "vrai_ou_faux",
+        "question": "test",
+        "answer": "Vrai"
       }
     ]
   }
