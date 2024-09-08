@@ -1,19 +1,10 @@
 
 import streamlit as st
 import pandas as pd
-from streamlit_javascript import st_javascript
+
 from app import authenticate_user, register_user, save_score, get_leaderboard, get_account_details
 
 import datetime
-
-def set_cookie(key, value, expire_days=2):
-    expires = datetime.datetime.utcnow() + datetime.timedelta(days=expire_days)
-    st_javascript(f"document.cookie = '{key}={value}; expires={expires.strftime('%a, %d %b %Y %H:%M:%S GMT')}; path=/';")
-
-def get_cookie(key):
-    cookies = st_javascript("return document.cookie;")
-    cookie_dict = dict(x.split('=') for x in cookies.split('; ') if '=' in x)
-    return cookie_dict.get(key, None)
 
 
 def show_login_signup():
@@ -35,8 +26,6 @@ def show_login_signup():
             if register_user(username, password):
                 st.success("Inscription réussie! Vous serez redirigé vers la page de quiz.")
                 st.session_state.username = username
-                if remember_me:
-                    st_javascript(f"document.cookie = 'username={username}; path=/';")
                 st.experimental_rerun()
             else:
                 st.error("Nom d'utilisateur déjà pris.")
@@ -51,8 +40,6 @@ def show_login_signup():
             if authenticate_user(username, password):
                 st.success("Connexion réussie! Vous serez redirigé vers la page de quiz.")
                 st.session_state.username = username
-                if remember_me:
-                    st_javascript(f"document.cookie = 'username={username}; path=/';")
                 st.experimental_rerun()
             else:
                 st.error("Identifiants incorrects.")
