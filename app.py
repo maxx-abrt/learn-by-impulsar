@@ -8,12 +8,80 @@ import datetime
 from community_questions import load_community_questions, add_community_question
 
 
+COOLDOWN_TIME = 15
+
+
+
+
+
+
+
+
 def load_community_questions():
     with open('community_questions.json', 'r') as f:
         return json.load(f)
 
 
+def update_last_submission_time(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    timestamp = int(time.time())
+    c.execute('INSERT INTO user_submissions (username, timestamp) VALUES (?, ?)', (username, timestamp))
+    conn.commit()
+    conn.close()
 
+def get_last_submission_time(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('SELECT MAX(timestamp) FROM user_submissions WHERE username=?', (username,))
+    last_submission_time = c.fetchone()[0]
+    conn.close()
+    return last_submission_time
+
+COOLDOWN_TIME = 30
+
+def update_cooldown():
+    if "last_submission_time" not in st.session_state:
+        st.session_state.last_submission_time = time.time()
+    
+    current_time = time.time()
+    time_since_last_submission = current_time - st.session_state.last_submission_time
+    
+    st.session_state.can_submit = time_since_last_submission >= COOLDOWN_TIME
+    
+    time_remaining = COOLDOWN_TIME - time_since_last_submission
+    st.session_state.time_remaining = max(0, int(time_remaining))
+
+def display_cooldown():
+    update_cooldown()
+    
+    if not st.session_state.can_submit:
+        # Espace vide pour le compte à rebours dynamique
+        countdown_placeholder = st.empty()
+        
+        while not st.session_state.can_submit:
+            # Met à jour le compte à rebours
+            update_cooldown()
+            
+            if st.session_state.can_submit:
+                countdown_placeholder.write("Vous pouvez soumettre à nouveau !")
+            else:
+                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans {st.session_state.time_remaining} secondes.")
+            
+            # Met à jour toutes les 1 seconde
+            time.sleep(1)
+    else:
+        st.write("Vous pouvez soumettre à nouveau !")  
+# Définir le cooldown en secondes
+
+
+
+def submit_quiz():
+    """Gère la soumission du quiz et met à jour le temps de la dernière soumission."""
+    st.session_state.last_submission_time = time.time()
+    st.session_state.can_submit = False
+    st.session_state.time_remaining = COOLDOWN_TIME
+    st.success("Quiz soumis avec succès!")
 
 # Charger les données des questions depuis le fichier JSON
 with open('questions_data.json', 'r') as f:
@@ -126,7 +194,7 @@ def display_questions(questions, username):
     
 
     # Vérifier les réponses et afficher les résultats
-    if st.button("Vérifier les réponses"):
+    ##if st.button("Vérifier les réponses"):
         score = 0
         total_questions = len(questions)
         correct_count = 0
@@ -275,22 +343,36 @@ def main():
                 sub_system_choice = st.selectbox("Choisissez un sous-système", list(questions_data[system_choice].keys()))
             
             if sub_system_choice:
-                question_source = st.radio("Sélectionnez la source des questions", ["Questions vérifiées", "Questions de la communauté"])
-                
-                if question_source == "Questions vérifiées":
+             question_source = st.radio("Sélectionnez la source des questions",[":green[Questions vérifiées]", ":blue[Questions de la communauté]"],captions=["Questions créées par le développeur, vérifiées et sûres","Questions faites par les membres de la communauté, potentiellemment troll ou inexactes"],)
+
+            if question_source == ":green[Questions vérifiées]":
                     questions = questions_data[system_choice][sub_system_choice]
-                else:
+            else:
                     community_questions = load_community_questions()
                     questions = community_questions.get(system_choice, {}).get(sub_system_choice, [])
 
                 # Vérification s'il y a des questions disponibles
-                if questions:
+            if questions:
                     st.write(f"### Questions chargées depuis la communauté pour {sub_system_choice} du {system_choice} :")
                     
                     # Boucle sur les questions de la communauté pour les afficher
-                    display_questions(questions, st.session_state.username)
-                else:
+
+                    display_cooldown()
+                    
+                    if st.session_state.can_submit:
+                        display_questions(questions, st.session_state.username)
+                        if st.button("Soumettre le quiz"):
+                            submit_quiz()
+                            
+                    else:
+                        st.write("Vous devez attendre avant de pouvoir soumettre à nouveau.")
+            else:
                     st.info("Aucune question disponible pour cette sélection.")
+
+
+
+
+
 
         elif menu_option == "Contribuer aux questions":
             st.header("Contribuer aux questions")
@@ -395,7 +477,7 @@ def display_questions(questions, username):
     # Vérification des réponses et affichage des résultats
 
     # Vérification des réponses et affichage des résultats
-    if st.button("Vérifier les réponses"):
+    if st.button("Voir la correction"):
         score = 0
         total_questions = len(questions)
         st.write("### Résultats")
