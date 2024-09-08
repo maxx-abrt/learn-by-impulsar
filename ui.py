@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 
-from app import authenticate_user, register_user, save_score, get_leaderboard, get_account_details
+from app import authenticate_user, register_user, save_score, get_leaderboard, get_account_details, display_questions, contribute_questions
 
 import datetime
 

@@ -4,9 +4,13 @@ import json
 import hashlib
 import time
 import pandas as pd  # Assurez-vous que pandas est importé
-
 import datetime
+from community_questions import load_community_questions, add_community_question
 
+
+def load_community_questions():
+    with open('community_questions.json', 'r') as f:
+        return json.load(f)
 
 
 
@@ -76,6 +80,7 @@ def get_leaderboard():
     leaderboard = c.fetchall()
     conn.close()
     return leaderboard
+
 
 # Fonction pour obtenir les détails du compte
 def get_account_details(username):
@@ -199,7 +204,7 @@ def main():
         else:
             cookie_username = None
 
-    # Afficher la leaderboard avant connexion
+    # Afficher le leaderboard avant connexion
     if not st.session_state.username:
         st.write("### Leaderboard")
         leaderboard = get_leaderboard()
@@ -247,13 +252,13 @@ def main():
                     st.session_state.username = "invité"
                     st.success("Vous êtes connecté en tant qu'invité.")
                     st.write("Redirection en cours...")
-    
+
     # Partie principale (contenu du quiz et des questions) au centre de la page
     if st.session_state.username:
         with st.sidebar:
             menu_option = st.selectbox(
                 "Menu",
-                ["Quiz", "Voir mon compte", "Déconnexion"]
+                ["Quiz", "Voir mon compte", "Contribuer aux questions", "Déconnexion"]
             )
         
         if menu_option == "Déconnexion":
@@ -261,26 +266,36 @@ def main():
             st.success("Vous êtes déconnecté. Vous serez redirigé vers la page de connexion.")
             st.write("Redirection en cours...")
         
-        if menu_option == "Quiz":
-            st.write("### Leaderboard")
-            leaderboard = get_leaderboard()
-            leaderboard_df = pd.DataFrame(leaderboard, columns=['Username', 'Total Points'])
-            leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
-            leaderboard_df = leaderboard_df.head(10)
-            st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
-            
+        elif menu_option == "Quiz":
             st.write("### Sélectionnez un système")
             system_choice = st.selectbox("Choisissez un système", ["Système osseux", "Système circulatoire", "Système respiratoire", "Système nerveux"])
             
             if system_choice:
                 st.write("### Sélectionnez un sous-système")
                 sub_system_choice = st.selectbox("Choisissez un sous-système", list(questions_data[system_choice].keys()))
+            
+            if sub_system_choice:
+                question_source = st.radio("Sélectionnez la source des questions", ["Questions vérifiées", "Questions de la communauté"])
                 
-                if sub_system_choice:
-                    st.header(f"Questions pour {sub_system_choice} du {system_choice}")
+                if question_source == "Questions vérifiées":
                     questions = questions_data[system_choice][sub_system_choice]
+                else:
+                    community_questions = load_community_questions()
+                    questions = community_questions.get(system_choice, {}).get(sub_system_choice, [])
+
+                # Vérification s'il y a des questions disponibles
+                if questions:
+                    st.write(f"### Questions chargées depuis la communauté pour {sub_system_choice} du {system_choice} :")
+                    
+                    # Boucle sur les questions de la communauté pour les afficher
                     display_questions(questions, st.session_state.username)
-        
+                else:
+                    st.info("Aucune question disponible pour cette sélection.")
+
+        elif menu_option == "Contribuer aux questions":
+            st.header("Contribuer aux questions")
+            contribute_questions()
+
         elif menu_option == "Voir mon compte":
             total_points, quizzes_completed, time_spent = get_account_details(st.session_state.username)
             st.header("Détails de mon compte")
@@ -306,6 +321,123 @@ def main():
                 st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
 
 st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
+
+def contribute_questions():
+    question_type = st.selectbox("Type de question", ["mcq", "vrai_ou_faux", "fill_in"])
+    system = st.selectbox("Système", list(questions_data.keys()))
+    subsystem = st.selectbox("Sous-système", list(questions_data[system].keys()))
+    
+    question = st.text_input("Question")
+    
+    if question_type == "mcq":
+        options = []
+        for i in range(4):
+            option = st.text_input(f"Option {i+1}")
+            options.append(option)
+        correct_answers = st.multiselect("Réponse(s) correcte(s)", options)
+        
+        question_data = {
+            "question": question,
+            "options": options,
+            "answer": correct_answers
+        }
+    
+    elif question_type == "vrai_ou_faux":
+        answer = st.radio("Réponse correcte", ["Vrai", "Faux"])
+        
+        question_data = {
+            "question": question,
+            "answer": answer
+        }
+    
+    else:  # Quiz
+        answer = st.text_input("fill_in")
+        
+        question_data = {
+            "question": question,
+            "answer": answer
+        }
+    
+    if st.button("Valider ma question"):
+        add_community_question(system, subsystem, question_type.lower().replace(" ", "_"), question_data)
+        st.success("Votre question a été ajoutée avec succès!")
+
+def save_user_answers(username, question_id, answer, is_correct):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('INSERT INTO user_answers (username, question_id, answer, is_correct) VALUES (?, ?, ?, ?)', 
+          (username, question_id, answer, is_correct))
+    conn.commit()
+    conn.close()
+
+
+
+
+def display_questions(questions, username):
+    user_answers = {}
+    correct_answers = {}
+    
+
+    for idx, q in enumerate(questions):
+        q_type = q.get("type")
+        question = q.get("question")
+        if q_type == "mcq":
+            options = q.get("options")
+            user_answers[idx] = st.radio(question, options, key=idx)
+            correct_answers[idx] = q.get("answer")
+        elif q_type == "vrai_ou_faux" or q_type == "true_false":
+            user_answers[idx] = st.radio(question, ["Vrai", "Faux"], key=idx)
+            correct_answers[idx] = q.get("answer")
+        elif q_type == "fill_in":
+            user_answers[idx] = st.text_input(question, key=idx)
+            correct_answers[idx] = q.get("answer")
+    
+    # Vérification des réponses et affichage des résultats
+
+    # Vérification des réponses et affichage des résultats
+    if st.button("Vérifier les réponses"):
+        score = 0
+        total_questions = len(questions)
+        st.write("### Résultats")
+        
+        for idx, q in enumerate(questions):
+            question = q.get("question")
+            correct_answer = correct_answers.get(idx)
+            user_answer = user_answers.get(idx)
+            
+            # Validation de la réponse en fonction du type de question
+            if q.get("type") == "mcq":
+                is_correct = user_answer == correct_answer
+            elif q.get("type") == "vrai_ou_faux" or q.get("type") == "true_false":
+                is_correct = user_answer == correct_answer
+            elif q.get("type") == "fill_in":
+                is_correct = user_answer.strip().lower() == correct_answer.strip().lower()
+            
+            # Affichage des résultats
+            if is_correct:
+                score += 1
+                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:green;'>Correct</span>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:red;'>Incorrect, Réponse correcte : `{correct_answer}`</span>", unsafe_allow_html=True)
+
+            
+                    # Enregistrement du score
+        save_score(username, score)
+        
+        st.write("### Votre Score")
+        score_percentage = (score / total_questions) * 100
+        st.write(f"**Score:** {score}/{total_questions}")
+        st.write(f"**Pourcentage de bonnes réponses:** {score_percentage:.2f}%")
+        st.progress(score_percentage / 100)
+
+
+        st.write("### Leaderboard")
+        leaderboard = get_leaderboard()
+        leaderboard_df = pd.DataFrame(leaderboard, columns=['Username', 'Total Points'])
+        leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
+        leaderboard_df = leaderboard_df.head(10)
+        st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
+            
 
 if __name__ == "__main__":
     main()

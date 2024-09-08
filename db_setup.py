@@ -44,6 +44,17 @@ def init_db():
         )
               
     ''')
+    
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS user_answers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        question_id INTEGER NOT NULL,
+        user_answers TEXT NOT NULL,
+        is_correct INTEGER NOT NULL,
+        FOREIGN KEY (username) REFERENCES users (username)
+    )
+''')
 
     
     
