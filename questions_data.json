@@ -1,0 +1,110 @@
+{
+    "Système osseux": {
+        "Crâne": [
+            {"question": "Quelle partie du crâne est située à l'arrière de la tête ?", "options": ["Frontal", "Pariétal", "Temporal", "Occipital"], "answer": "Occipital", "type": "mcq"},
+            {"question": "Quel os forme le plafond de la cavité orbitale ?", "options": ["Ethmoïde", "Sphénoïde", "Frontal", "Occipital"], "answer": "Frontal", "type": "mcq"},
+            {"question": "Vrai ou Faux : L'os sphénoïde se trouve dans la région latérale du crâne.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : La partie inférieure de l'os frontal est appelée ______.", "answer": "Bord supra-orbitaire", "type": "fill_in"},
+            {"question": "Quelle est la principale fonction des os du crâne ?", "options": ["Protéger le cerveau", "Supporter le poids du corps", "Permettre les mouvements", "Absorber les chocs"], "answer": "Protéger le cerveau", "type": "mcq"},
+            {"question": "Vrai ou Faux : L'os temporal contient l'os occipital.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel os forme le front et une partie du toit des orbites ?", "options": ["Frontal", "Pariétal", "Temporal", "Occipital"], "answer": "Frontal", "type": "mcq"},
+            {"question": "Complétez la phrase : L'os ______ est situé au niveau des joues.", "answer": "Zygomatique", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Le sinus sphénoïdal est situé dans l'os frontal.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quelle structure est située à la base du crâne et forme le foramen magnum ?", "options": ["Occipital", "Sphénoïde", "Frontal", "Temporal"], "answer": "Occipital", "type": "mcq"},
+            {"question": "Complétez la phrase : L'os ______ est le plus grand os du crâne.", "answer": "Frontal", "type": "fill_in"},
+            {"question": "Vrai ou Faux : L'os ethmoïde forme la partie postérieure du crâne.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel os est principalement responsable de la formation du toit de la cavité nasale ?", "options": ["Ethmoïde", "Sphénoïde", "Frontal", "Occipital"], "answer": "Ethmoïde", "type": "mcq"},
+            {"question": "Complétez la phrase : L'os ______ se trouve dans la région inférieure du crâne.", "answer": "Occipital", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Le crâne est composé de 22 os.", "answer": "Vrai", "type": "true_false"}
+        ],
+        "Colonne vertébrale": [
+            {"question": "Quelle région de la colonne vertébrale est la plus mobile ?", "options": ["Cervicale", "Thoracique", "Lombaire", "Sacrum"], "answer": "Cervicale", "type": "mcq"},
+            {"question": "Combien de vertèbres sont présentes dans la région thoracique ?", "options": ["7", "12", "5", "8"], "answer": "12", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le sacrum est formé par la fusion de 5 vertèbres.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Complétez la phrase : Les ______ sont situées entre les vertèbres et permettent la flexibilité de la colonne vertébrale.", "answer": "Disques intervertébraux", "type": "fill_in"},
+            {"question": "Quel est le nom de la courbure normale de la colonne vertébrale au niveau thoracique ?", "options": ["Lordose", "Cyphose", "Scoliose", "Kynose"], "answer": "Cyphose", "type": "mcq"},
+            {"question": "Vrai ou Faux : Les vertèbres cervicales sont les plus grandes de la colonne vertébrale.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel est le nom du processus épineux ?", "options": ["Partie antérieure des vertèbres", "Partie postérieure des vertèbres", "Partie latérale des vertèbres", "Partie médiane des vertèbres"], "answer": "Partie postérieure des vertèbres", "type": "mcq"},
+            {"question": "Complétez la phrase : La ______ est une déformation latérale anormale de la colonne vertébrale.", "answer": "Scoliose", "type": "fill_in"},
+            {"question": "Vrai ou Faux : La colonne vertébrale est constituée de 33 vertèbres individuelles.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Quelle région de la colonne vertébrale est souvent associée à des douleurs lombaires ?", "options": ["Cervicale", "Thoracique", "Lombaire", "Sacrum"], "answer": "Lombaire", "type": "mcq"},
+            {"question": "Complétez la phrase : Le processus ______ est une partie des vertèbres cervicales qui permet la rotation de la tête.", "answer": "Odontoïde", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les vertèbres sacrées sont les plus mobiles de la colonne vertébrale.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel est le nom de l'espace situé entre les vertèbres pour les nerfs spinaux ?", "options": ["Foramen vertébral", "Canal rachidien", "Disque intervertébral", "Foramen intervertébral"], "answer": "Foramen intervertébral", "type": "mcq"},
+            {"question": "Complétez la phrase : La ______ est la partie supérieure de la colonne vertébrale.", "answer": "Cervicale", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Le coccyx est constitué de 4 vertèbres fusionnées.", "answer": "Vrai", "type": "true_false"}
+        ]
+    },
+    "Système circulatoire": {
+        "Cœur": [
+            {"question": "Quelle est la principale fonction du ventricule gauche ?", "options": ["Recevoir le sang désoxygéné", "Pomper le sang vers les poumons", "Pomper le sang oxygéné vers le reste du corps", "Recevoir le sang oxygéné"], "answer": "Pomper le sang oxygéné vers le reste du corps", "type": "mcq"},
+            {"question": "Quel est le nom de la valve entre l'atrium gauche et le ventricule gauche ?", "options": ["Valve tricuspide", "Valve mitrale", "Valve pulmonaire", "Valve aortique"], "answer": "Valve mitrale", "type": "mcq"},
+            {"question": "Vrai ou Faux : La valve tricuspide se trouve entre l'atrium gauche et le ventricule gauche.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : La ______ est responsable de la régulation de la pression artérielle.", "answer": "Valve aortique", "type": "fill_in"},
+            {"question": "Quelle est la principale fonction de la circulation pulmonaire ?", "options": ["Oxygéner le sang", "Nourrir les tissus", "Éliminer les déchets", "Distribuer les hormones"], "answer": "Oxygéner le sang", "type": "mcq"},
+            {"question": "Vrai ou Faux : L'oreillette droite reçoit le sang oxygéné des poumons.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel vaisseau transporte le sang du cœur aux poumons ?", "options": ["Aorte", "Veine cave", "Artère pulmonaire", "Veine pulmonaire"], "answer": "Artère pulmonaire", "type": "mcq"},
+            {"question": "Complétez la phrase : Le ______ est la principale artère du corps humain.", "answer": "Aorte", "type": "fill_in"},
+                        {"question": "Vrai ou Faux : Les veines pulmonaires transportent le sang désoxygéné des poumons vers le cœur.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel est le rôle des valves cardiaques ?", "options": ["Empêcher le reflux sanguin", "Pomper le sang", "Réguler la fréquence cardiaque", "Distribuer les nutriments"], "answer": "Empêcher le reflux sanguin", "type": "mcq"},
+            {"question": "Complétez la phrase : L'________ est une condition où les artères sont obstruées par des dépôts graisseux.", "answer": "Athérosclérose", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Le cœur a quatre cavités.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Quelle partie du cœur reçoit le sang désoxygéné venant du corps ?", "options": ["Atrium gauche", "Ventricule droit", "Atrium droit", "Ventricule gauche"], "answer": "Atrium droit", "type": "mcq"},
+            {"question": "Complétez la phrase : Le ______ est la principale veine qui transporte le sang du corps vers le cœur.", "answer": "Veine cave", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les artères coronaires irriguent le cœur lui-même.", "answer": "Vrai", "type": "true_false"}
+        ],
+        "Vaisseaux sanguins": [
+            {"question": "Quelle est la fonction principale des artères ?", "options": ["Transporter le sang vers le cœur", "Transporter le sang vers les organes et tissus", "Filtrer le sang", "Réguler la pression artérielle"], "answer": "Transporter le sang vers les organes et tissus", "type": "mcq"},
+            {"question": "Vrai ou Faux : Les veines ont des parois plus épaisses que les artères.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel type de vaisseau est responsable des échanges de nutriments et de déchets avec les tissus ?", "options": ["Artères", "Veines", "Capillaires", "Veinules"], "answer": "Capillaires", "type": "mcq"},
+            {"question": "Complétez la phrase : Les ______ sont les petits vaisseaux sanguins qui connectent les artères et les veines.", "answer": "Capillaires", "type": "fill_in"},
+            {"question": "Quelle structure dans les veines aide à empêcher le reflux sanguin ?", "options": ["Valves", "Parois musculaires", "Artères", "Capillaires"], "answer": "Valves", "type": "mcq"},
+            {"question": "Vrai ou Faux : Les artères pulmonaires transportent le sang oxygéné vers les poumons.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel type de vaisseau est le plus gros dans le système circulatoire ?", "options": ["Veine", "Artère", "Capillaire", "Veinule"], "answer": "Artère", "type": "mcq"},
+            {"question": "Complétez la phrase : Les ______ sont les petits vaisseaux sanguins qui recueillent le sang des capillaires et le transportent vers le cœur.", "answer": "Veinules", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les veines pulmonaires transportent le sang oxygéné des poumons vers le cœur.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Quel est le rôle des capillaires dans le système circulatoire ?", "options": ["Transporter le sang entre les artères et les veines", "Filtrer le sang", "Réguler la pression artérielle", "Pomper le sang"], "answer": "Transporter le sang entre les artères et les veines", "type": "mcq"},
+            {"question": "Complétez la phrase : Les ______ sont les vaisseaux sanguins qui transportent le sang désoxygéné du cœur vers les poumons.", "answer": "Artères pulmonaires", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les capillaires sont les vaisseaux sanguins les plus larges du système circulatoire.", "answer": "Faux", "type": "true_false"},
+            {"question": "Quel type de vaisseau est souvent utilisé pour les prélèvements sanguins ?", "options": ["Artères", "Veines", "Capillaires", "Veinules"], "answer": "Veines", "type": "mcq"},
+            {"question": "Complétez la phrase : Les ______ transportent le sang du cœur vers les poumons.", "answer": "Artères pulmonaires", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les artères sont responsables de l'absorption des nutriments dans les tissus.", "answer": "Faux", "type": "true_false"}
+        ]
+    },
+    "Système respiratoire": {
+        "Poumons": [
+            {"question": "Quelle est la fonction principale des alvéoles pulmonaires ?", "options": ["Transporter le dioxyde de carbone", "Transporter l'oxygène", "Échanger les gaz entre l'air et le sang", "Réguler le pH du sang"], "answer": "Échanger les gaz entre l'air et le sang", "type": "mcq"},
+            {"question": "Vrai ou Faux : Les poumons droit et gauche ont le même nombre de lobes.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : Les ______ sont les plus petites structures des voies respiratoires où l'échange de gaz se produit.", "answer": "Alvéoles", "type": "fill_in"},
+            {"question": "Quel est le nom de la partie inférieure de la trachée qui se divise en bronches principales ?", "options": ["Carène", "Diaphragme", "Larynx", "Bronchioles"], "answer": "Carène", "type": "mcq"},
+            {"question": "Vrai ou Faux : L'échange gazeux dans les poumons se fait uniquement dans les bronches.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : La ______ est une membrane double qui entoure les poumons.", "answer": "Plèvre", "type": "fill_in"},
+            {"question": "Quelle est la structure qui divise les poumons en lobes ?", "options": ["Plèvre", "Médiastin", "Septum", "Bronche"], "answer": "Septum", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le poumon gauche est légèrement plus grand que le poumon droit.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : Les ______ sont les petites branches des bronches qui mènent aux alvéoles.", "answer": "Bronchioles", "type": "fill_in"},
+            {"question": "Quelle partie du poumon est la plus affectée par le tabagisme ?", "options": ["Alvéoles", "Bronches", "Trachée", "Diaphragme"], "answer": "Alvéoles", "type": "mcq"},
+            {"question": "Vrai ou Faux : La plèvre sécrète un liquide lubrifiant pour faciliter le mouvement des poumons.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Quel est le rôle du diaphragme dans la respiration ?", "options": ["Séparer les poumons du cœur", "Aider à l'expansion des poumons", "Transporter l'air vers les alvéoles", "Filtrer l'air inspiré"], "answer": "Aider à l'expansion des poumons", "type": "mcq"},
+            {"question": "Complétez la phrase : Les ______ transportent l'air inspiré vers les alvéoles.", "answer": "Bronches", "type": "fill_in"},
+            {"question": "Vrai ou Faux : Les bronches se ramifient en bronchioles avant d'atteindre les alvéoles.", "answer": "Vrai", "type": "true_false"}
+        ]
+
+    },
+    "Système nerveux": { 
+        "Tronc cérébral": [
+            {"question": "Quelle partie du tronc cérébral régule les fonctions autonomes comme la respiration ?", "options": ["Mésencéphale", "Pont", "Bulbe rachidien", "Thalamus"], "answer": "Bulbe rachidien", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le tronc cérébral est impliqué dans la régulation des mouvements volontaires.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : Le ______ est la partie du tronc cérébral responsable de la régulation de la respiration et du rythme cardiaque.", "answer": "Bulbe rachidien", "type": "fill_in"},
+            {"question": "Quel est le rôle du pont dans le tronc cérébral ?", "options": ["Coordonner les mouvements", "Réguler la température corporelle", "Contrôler la respiration", "Recevoir les informations sensorielles"], "answer": "Coordonner les mouvements", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le tronc cérébral se compose de trois parties principales.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Complétez la phrase : Le ______ joue un rôle clé dans la transmission des informations entre le cerveau et la moelle épinière.", "answer": "Tronc cérébral", "type": "fill_in"},
+            {"question": "Quel est le rôle du mésencéphale dans le tronc cérébral ?", "options": ["Contrôler la vision et l'audition", "Réguler la fréquence cardiaque", "Coordonner les mouvements", "Réguler le sommeil"], "answer": "Contrôler la vision et l'audition", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le tronc cérébral est responsable des fonctions de survie vitales telles que la respiration et la fréquence cardiaque.", "answer": "Vrai", "type": "true_false"},
+            {"question": "Complétez la phrase : Le ______ est une partie du tronc cérébral située entre le mésencéphale et le bulbe rachidien.", "answer": "Pont", "type": "fill_in"},
+            {"question": "Quel est le rôle du bulbe rachidien ?", "options": ["Coordonner la respiration", "Contrôler les mouvements des yeux", "Réguler les émotions", "Filtrer les informations sensorielles"], "answer": "Coordonner la respiration", "type": "mcq"},
+            {"question": "Vrai ou Faux : Le pont est impliqué dans le contrôle des fonctions autonomes comme la digestion.", "answer": "Faux", "type": "true_false"},
+            {"question": "Complétez la phrase : Le ______ régule également le sommeil et les cycles de veille.", "answer": "Tronc cérébral", "type": "fill_in"}
+        ]
+    }
+
+}
