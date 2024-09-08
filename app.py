@@ -8,7 +8,7 @@ import datetime
 from community_questions import load_community_questions, add_community_question
 
 
-COOLDOWN_TIME = 15
+COOLDOWN_TIME = 5
 
 
 
