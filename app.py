@@ -178,6 +178,7 @@ def display_public_profile(username):
 
 def main():
     st.title("Quiz Anatomie")
+    st.subheader("Cliquez sur la flèche ➤ en haut à gauche pour ouvrir la barre de contrôle et vous créer un compte, vous connecter ou découvrir en tant qu'invité !")
     
     # Initialisation de st.session_state.username
     if "username" not in st.session_state:
@@ -258,7 +259,7 @@ def main():
         if menu_option == "Déconnexion":
             st.session_state.username = None
             st.success("Vous êtes déconnecté. Vous serez redirigé vers la page de connexion.")
-            st.experimental_rerun()
+            st.write("Redirection en cours...")
         
         if menu_option == "Quiz":
             st.write("### Leaderboard")
