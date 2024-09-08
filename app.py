@@ -13,12 +13,13 @@ import os
 COOLDOWN_TIME = 15
 
 hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            .viewerBadge_container__1QSob {display: none;}  /* Cache le bouton "fort" */
-            .stActionButton {visibility: hidden;}  /
-            </style>
+    <style>
+    #MainMenu {visibility: hidden;}  /* Cache le menu hamburger */
+    footer {visibility: hidden;}  /* Cache le footer */
+    .viewerBadge_container__1QSob {display: none;}  /* Cache le bouton "fort" */
+    .stActionButton {visibility: hidden;}  /* Cache le bouton GitHub si présent */
+    .stFooter {visibility: hidden;}  /* Cache le bouton "Posted with Streamlit" */
+    </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)  
 
