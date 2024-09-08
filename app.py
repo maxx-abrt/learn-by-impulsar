@@ -38,7 +38,6 @@ def get_last_submission_time(username):
     conn.close()
     return last_submission_time
 
-COOLDOWN_TIME = 30
 
 def update_cooldown():
     if "last_submission_time" not in st.session_state:
