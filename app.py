@@ -245,7 +245,7 @@ def main():
                 if st.button("Se connecter en tant qu'invité"):
                     st.session_state.username = "invité"
                     st.success("Vous êtes connecté en tant qu'invité.")
-                    st.experimental_rerun()
+                    st.write("Redirection en cours...")
     
     # Partie principale (contenu du quiz et des questions) au centre de la page
     if st.session_state.username:
