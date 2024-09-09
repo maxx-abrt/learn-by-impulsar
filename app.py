@@ -4,12 +4,12 @@ import json
 import hashlib
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
-import datetime
+
 
 # Constantes
 COOLDOWN_TIME = 15
@@ -171,7 +171,7 @@ def display_chat():
 
     # Affichage des messages
     for i, (username, msg, timestamp) in enumerate(reversed(st.session_state.messages)):
-        time_str = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        time_str = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
         domain = get_user_domain(username)
         message_class = 'message new' if i == 0 else 'message'
         st.markdown(f"""
