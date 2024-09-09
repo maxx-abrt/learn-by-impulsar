@@ -171,7 +171,7 @@ def display_chat():
 
     # Affichage des messages
     for i, (username, msg, timestamp) in enumerate(reversed(st.session_state.messages)):
-        time_str = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        time_str = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
         domain = get_user_domain(username)
         message_class = 'message new' if i == 0 else 'message'
         st.markdown(f"""
@@ -360,7 +360,7 @@ def create_user(username, password, domain, study_level):
     hashed_password = hash_password(password)
     try:
         c.execute("INSERT INTO users (username, password, domain, study_level, registration_date) VALUES (?, ?, ?, ?, ?)",
-                  (username, hashed_password, domain, study_level, datetime.datetime.now()))
+                  (username, hashed_password, domain, study_level, datetime.now()))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
