@@ -9,11 +9,21 @@ from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
-
+import threading
 
 # Constantes
 COOLDOWN_TIME = 15
 
+def ping_app():
+    while True:
+        try:
+            requests.get("https://learn.impulsarstudios.xyz")
+            time.sleep(300)  # Attendre 5 minutes
+        except:
+            pass
+
+# Démarrer le thread de ping en arrière-plan
+threading.Thread(target=ping_app, daemon=True).start()
 
 
 
@@ -497,6 +507,7 @@ def custom_radio(label, options, subtitles):
     for i, (option, subtitle) in enumerate(zip(options, subtitles)):
         if st.sidebar.button(option, key=f"nav_{i}"):
             st.session_state.page = option
+    st.sidebar.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
     st.sidebar.markdown('</div>', unsafe_allow_html=True)
     return st.session_state.get('page', options[0])
 
