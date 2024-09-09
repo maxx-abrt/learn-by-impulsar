@@ -4,14 +4,7 @@ def init_db():
     conn = sqlite3.connect('quiz_app.db')
     c = conn.cursor()
     
-    # Création de la table des utilisateurs
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
+
     
     # Création de la table des scores
     c.execute('''
@@ -56,16 +49,27 @@ def init_db():
     )
 ''')
     
-    c.execute('''
-    CREATE TABLE user_submissions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    timestamp INTEGER NOT NULL
-    );
-   ''')
 
+
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        study_level TEXT NOT NULL,
+        points INTEGER DEFAULT 0,
+        quizzes_completed INTEGER DEFAULT 0,
+        registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+''')
     
     
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_messages
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT,
+                  message TEXT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
 

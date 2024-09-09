@@ -3,702 +3,716 @@ import sqlite3
 import json
 import hashlib
 import time
-import pandas as pd  # Assurez-vous que pandas est importé
-import datetime
+import pandas as pd
+from datetime import datetime
 from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
 
+# Constantes
 COOLDOWN_TIME = 15
 
-hide_streamlit_style = """
+
+
+
+def get_top_users(limit=10):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT username, SUM(points) as total_points 
+        FROM users
+        GROUP BY username 
+        ORDER BY total_points DESC 
+        LIMIT ?
+    """, (limit,))
+    results = c.fetchall()
+    conn.close()
+    return results
+
+def display_leaderboard():
+    top_users = get_top_users()
+    
+    st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}  /* Cache le menu hamburger */
-    footer {visibility: hidden;}  /* Cache le footer */
-    .stActionButton {visibility: hidden;}  /* Cache le bouton GitHub si présent */
-    .stFooter {visibility: hidden;}  /* Cache le bouton "Posted with Streamlit" */
+    .leaderboard {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .leaderboard h3 {
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    .leaderboard table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .leaderboard th, .leaderboard td {
+        text-align: left;
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+    .leaderboard tr:nth-child(even) {
+        background-color: #e6e9ed;
+    }
+    .leaderboard tr:hover {
+        background-color: #d1d5db;
+    }
     </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)  
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="leaderboard">', unsafe_allow_html=True)
+    st.markdown('<h3>Top 10 des utilisateurs : Leaderboard</h3>', unsafe_allow_html=True)
+    
+    df = pd.DataFrame(top_users, columns=['Utilisateur', 'Points'])
+    df.index = df.index + 1  # Start index at 1
+    st.table(df)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-# Charger les variables d'environnement depuis le fichier .env
+
+
+
+
+
+
+def display_chat():
+    st.subheader("Chat en direct")
+
+    # Styles CSS améliorés
+    st.markdown("""
+    <style>
+    .message {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+
+    }
+    .message.new {
+        animation: slideIn 0.5s ease-out;
+    }
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    .username {
+        font-weight: bold;
+        color: #2196F3;
+        margin-right: 5px;
+    }
+    .domain {
+        font-style: italic;
+        color: #4CAF50;
+        margin-left: 5px;
+    }
+    .timestamp {
+        font-size: 0.8em;
+        color: #888;
+        float: right;
+    }
+.input-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.input-container > div {
+    display: flex;
+    flex-grow: 1;
+}
+.input-container .stTextInput {
+    flex-grow: 1;
+}
+.input-container .stButton {
+    margin-left: 10px;
+}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div class='input-container'>", unsafe_allow_html=True)
+    message = st.text_input("Votre message:", key="message_input", value="", max_chars=None, type="default")
+    send_button = st.button("Envoyer")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Affichage du message de cooldown
+    cooldown_container = st.empty()
+
+    # Gestion du cooldown
+    if 'last_message_time' not in st.session_state:
+        st.session_state.last_message_time = 0
+
+    current_time = time.time()
+    cooldown = 5  # 5 secondes de cooldown
+
+    if send_button:
+        if current_time - st.session_state.last_message_time >= cooldown:
+            if message:
+                add_message(st.session_state.username, message)
+                st.session_state.last_message_time = current_time
+                st.session_state.messages = get_messages()
+                st.rerun()
+        else:
+            remaining_time = cooldown - (current_time - st.session_state.last_message_time)
+            cooldown_container.warning(f"Veuillez attendre {remaining_time:.1f} secondes avant d'envoyer un nouveau message.")
+
+    # Assurez-vous que les messages sont chargés dès l'ouverture de la page
+    if 'messages' not in st.session_state:
+        st.session_state.messages = get_messages()
+
+    # Affichage des messages
+    for i, (username, msg, timestamp) in enumerate(reversed(st.session_state.messages)):
+        time_str = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        domain = get_user_domain(username)
+        message_class = 'message new' if i == 0 else 'message'
+        st.markdown(f"""
+        <div class='{message_class}' id='message-{i}'>
+            <span class='username'>{username}</span>
+            <span class='domain'>({domain})</span>
+            <span class='timestamp'>{time_str}</span>
+            <br>{msg}
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Script JavaScript pour l'animation
+    st.markdown(
+    """
+    <script>
+    function animateNewMessage() {
+        var messages = document.querySelectorAll('.message');
+        if (messages.length > 0) {
+            var latestMessage = messages[0];
+            latestMessage.classList.add('new');
+        }
+    }
+
+    // Animer le dernier message au chargement de la page
+    document.addEventListener('DOMContentLoaded', animateNewMessage);
+    </script>
+    """,
+    unsafe_allow_html=True
+    )
+    
+    st.markdown("""
+<script>
+document.addEventListener('DOMContentLoaded', (event) => {
+    const inputField = document.querySelector('.input-container .stTextInput input');
+    const sendButton = document.querySelector('.input-container .stButton button');
+    
+    if (inputField && sendButton) {
+        inputField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendButton.click();
+            }
+        });
+    }
+});
+</script>
+""", unsafe_allow_html=True)
+
+# Fonction pour récupérer le domaine d'étude de l'utilisateur
+def get_user_domain(username):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT domain FROM users WHERE username = ?", (username,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else "Non spécifié"
+    
+
+# Fonction pour initialiser la base de données du chat (inchangée)
+def init_chat_db():
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_messages
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT,
+                  message TEXT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
+    conn.close()
+
+# Fonction pour ajouter un message au chat
+def add_message(username, message):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO chat_messages (username, message) VALUES (?, ?)", (username, message))
+    conn.commit()
+    conn.close()
+
+# Fonction pour récupérer les messages du chat
+def get_messages():
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT username, message, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT 50")
+    messages = c.fetchall()
+    conn.close()
+    return messages[::-1]  # Inverser l'ordre pour afficher les messages les plus récents en bas
+
+
+
+
+
+
+
+
+
+def display_account_details(username):
+    st.subheader(f"Compte de {username}")
+    
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT points, quizzes_completed, domain, study_level, registration_date FROM users WHERE username=?", (username,))
+    user_data = c.fetchone()
+    conn.close()
+    
+    if user_data:
+        points, quizzes_completed, domain, study_level, registration_date = user_data
+        
+        st.write(f"**Nom d'utilisateur:** {username}")
+        st.write(f"**Points obtenus aux QCM:** {points}")
+        st.write(f"**Nombre de quiz complétés:** {quizzes_completed}")
+        st.write(f"**Domaine d'étude:** {domain}")
+        st.write(f"**Niveau d'étude:** {study_level}")
+        st.write(f"**Date d'inscription:** {registration_date}")
+        
+        # Vous pouvez ajouter d'autres statistiques ici si nécessaire
+    else:
+        st.error("Erreur lors de la récupération des données utilisateur.")
+        
+        
+def initialize_question_files():
+    domains = ["anatomie", "physiologie", "chimie_biochimie", "mathematiques_arithmetique", "hygiene", "pharmacologie", "psychologie"]
+    types = ["official", "community"]
+    
+    placeholder_question = {
+        "domain": "",
+        "subdomain": "",
+        "subsystem": "",
+        "type": "QCM",
+        "question": "Ceci est une question placeholder.",
+        "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+        "correct_answer": "Option 1",
+        "explanation": "Ceci est une explication placeholder."
+    }
+
+    for domain in domains:
+        for qtype in types:
+            filename = f"{domain}_{qtype}_questions.json"
+            if not os.path.exists(filename):
+                with open(filename, 'w') as f:
+                    json.dump([placeholder_question], f, indent=2)
+            else:
+                with open(filename, 'r+') as f:
+                    try:
+                        data = json.load(f)
+                        if not data:  # Si le fichier est vide (liste vide)
+                            f.seek(0)
+                            json.dump([placeholder_question], f, indent=2)
+                            f.truncate()
+                    except json.JSONDecodeError:  # Si le fichier est vide ou mal formaté
+                        f.seek(0)
+                        json.dump([placeholder_question], f, indent=2)
+                        f.truncate()
+
+    print("Tous les fichiers de questions ont été initialisés ou vérifiés.")
+
+
+
+
+
+
+
+
+
+
+# Configuration de Streamlit
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# Chargement des variables d'environnement
 load_dotenv()
-
-# Configuration de l'API de Brevo depuis les variables d'environnement
 brevo_api_key = os.getenv("BREVO_API_KEY")
 brevo_api_url = os.getenv("BREVO_API_URL")
 
+# Fonctions d'authentification et de gestion des utilisateurs
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_user(username, password, domain, study_level):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    hashed_password = hash_password(password)
+    try:
+        c.execute("INSERT INTO users (username, password, domain, study_level, registration_date) VALUES (?, ?, ?, ?, ?)",
+                  (username, hashed_password, domain, study_level, datetime.datetime.now()))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def verify_user(username, password):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    hashed_password = hash_password(password)
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed_password))
+    user = c.fetchone()
+    conn.close()
+    return user is not None
+
+def get_user_stats(username):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT points, quizzes_completed, registration_date FROM users WHERE username=?", (username,))
+    stats = c.fetchone()
+    conn.close()
+    return stats
+
+def update_user_stats(username, points=0, quizzes_completed=0):
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET points = points + ?, quizzes_completed = quizzes_completed + ? WHERE username=?",
+              (points, quizzes_completed, username))
+    conn.commit()
+    conn.close()
+
+# Fonctions de gestion des quiz
+def load_questions(domain, subdomain=None, subsystem=None, question_type="official"):
+    file_name = f"{domain.lower().replace('/', '_')}_{question_type}_questions.json"
+    try:
+        with open(file_name, "r") as file:
+            all_questions = json.load(file)
+    except FileNotFoundError:
+        return []
+    
+    if domain == "Anatomie":
+        if subdomain and subsystem:
+            return [q for q in all_questions if q["subdomain"] == subdomain and q["subsystem"] == subsystem]
+        elif subdomain:
+            return [q for q in all_questions if q["subdomain"] == subdomain]
+    else:
+        if subdomain:
+            return [q for q in all_questions if q["subdomain"] == subdomain]
+    
+    return all_questions
+
+def add_question_to_json(question, question_type):
+    domain = question["domain"].lower().replace("/", "_")
+    file_name = f"{domain}_{question_type}_questions.json"
+    
+    try:
+        with open(file_name, "r") as file:
+            questions = json.load(file)
+    except FileNotFoundError:
+        questions = []
+    
+    questions.append(question)
+    
+    with open(file_name, "w") as file:
+        json.dump(questions, file, indent=2)
+
+# Fonction d'envoi d'email
 def send_email(name, email, message):
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
         "api-key": brevo_api_key
     }
-    
     data = {
         "sender": {"email": "maxaubert17@gmail.com", "name": "Formulaire de contact"},
         "to": [{"email": "maxaubert17@gmail.com", "name": "Max Aubert"}],
-        "cc": [{"email": email, "name": name}],  # Ajoute l'adresse e-mail de l'utilisateur en copie
+        "cc": [{"email": email, "name": name}],
         "subject": "Message depuis votre formulaire de contact",
         "htmlContent": f"""
         <html>
-        <head>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                    margin: 0;
-                    padding: 0;
-                    background-color: #f4f4f4;
-                }}
-                .container {{
-                    width: 80%;
-                    margin: auto;
-                    background-color: #ffffff;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                }}
-                h1 {{
-                    color: #4CAF50;
-                }}
-                .section {{
-                    margin-bottom: 20px;
-                }}
-                .section-title {{
-                    font-size: 18px;
-                    font-weight: bold;
-                    color: #333;
-                }}
-                .section-content {{
-                    padding: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    background-color: #fafafa;
-                }}
-                .footer {{
-                    font-size: 12px;
-                    color: #777;
-                    text-align: center;
-                    margin-top: 20px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Formulaire de Contact</h1>
-                <div class="section">
-                    <div class="section-title">Informations de l'utilisateur</div>
-                    <div class="section-content">
-                        <p><strong>Nom:</strong> {name}</p>
-                        <p><strong>Email:</strong> {email}</p>
-                    </div>
-                </div>
-                <div class="section">
-                    <div class="section-title">Message</div>
-                    <div class="section-content">
-                        <p>{message}</p>
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>Ce message a été envoyé depuis le formulaire de contact du site de quiz collaboratif.</p>
-                </div>
-            </div>
-        </body>
+            <body>
+                <h2>Nouveau message depuis le formulaire de contact</h2>
+                <p><strong>Nom:</strong> {name}</p>
+                <p><strong>Email:</strong> {email}</p>
+                <p><strong>Message:</strong></p>
+                <p>{message}</p>
+            </body>
         </html>
         """
     }
-    
-    response = requests.post(brevo_api_url, headers=headers, json=data)
-    
+    response = requests.post(brevo_api_url, json=data, headers=headers)
     return response.status_code == 201
 
 
+st.markdown("""
+<style>
+    .sidebar .sidebar-content {
+        background-image: linear-gradient(#2e7bcf,#2e7bcf);
+        color: white;
+    }
+    .sidebar-nav {
+        padding-top: 30px;
+    }
+    .sidebar-nav ul {
+        padding-left: 0;
+    }
+    .sidebar-nav li {
+        list-style-type: none;
+        margin-bottom: 20px;
+    }
+    .nav-link {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 5px;
+        text-decoration: none;
+        display: block;
+        transition: background-color 0.3s;
+    }
+    .nav-link:hover {
+        background-color: #45a049;
+    }
+    .nav-subtitle {
+        font-size: 12px;
+        color: #ddd;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def show_login_page():
-    st.header("Connexion")
-
-    # Formulaire de connexion
-    username = st.text_input("Nom d'utilisateur (connexion)")
-    password = st.text_input("Mot de passe (connexion)", type="password")
-    login_button = st.button(":green[Se connecter]")
-
-    st.header("Inscription")
-    # Formulaire d'inscription
-    register_username = st.text_input("Nom d'utilisateur (inscription)")
-    register_password = st.text_input("Mot de passe (inscription)", type="password")
-    register_button = st.button(":blue[S'inscrire]")
-
-    if login_button:
-        if authenticate_user(username, password):
-            st.success("Connexion réussie !")
-            st.session_state.logged_in = True  # Mettre à jour l'état
-            st.session_state.username = username  # Stocker l'utilisateur connecté
-            st.rerun()  # Recharger la page pour afficher la page principale
-        else:
-            st.error("Identifiants incorrects.")
-
-    if register_button:
-        if register_user(register_username, register_password):
-            st.success("Inscription réussie ! Vous pouvez maintenant vous connecter.")
-        else:
-            st.error("Erreur lors de l'inscription.")
-
-
-
-def load_community_questions():
-    with open('community_questions.json', 'r') as f:
-        return json.load(f)
-
-
-def update_last_submission_time(username):
-    conn = get_db_connection()
-    c = conn.cursor()
-    timestamp = int(time.time())
-    c.execute('INSERT INTO user_submissions (username, timestamp) VALUES (?, ?)', (username, timestamp))
-    conn.commit()
-    conn.close()
-
-def get_last_submission_time(username):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('SELECT MAX(timestamp) FROM user_submissions WHERE username=?', (username,))
-    last_submission_time = c.fetchone()[0]
-    conn.close()
-    return last_submission_time
+# Fonction pour créer un bouton radio personnalisé avec sous-titre
+def custom_radio(label, options, subtitles):
+    st.sidebar.markdown('<div class="sidebar-nav">', unsafe_allow_html=True)
+    for i, (option, subtitle) in enumerate(zip(options, subtitles)):
+        if st.sidebar.button(option, key=f"nav_{i}"):
+            st.session_state.page = option
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
+    return st.session_state.get('page', options[0])
 
 
-def update_cooldown():
-    if "last_submission_time" not in st.session_state:
-        st.session_state.last_submission_time = time.time()
-    
-    current_time = time.time()
-    time_since_last_submission = current_time - st.session_state.last_submission_time
-    
-    st.session_state.can_submit = time_since_last_submission >= COOLDOWN_TIME
-    
-    time_remaining = COOLDOWN_TIME - time_since_last_submission
-    st.session_state.time_remaining = max(0, int(time_remaining))
-
-def display_cooldown():
-    update_cooldown()
-    
-    if not st.session_state.can_submit:
-        # Espace vide pour le compte à rebours dynamique
-        countdown_placeholder = st.empty()
-        
-        while not st.session_state.can_submit:
-            # Met à jour le compte à rebours
-            update_cooldown()
-            
-            if st.session_state.can_submit:
-                countdown_placeholder.write("*Vous pouvez soumettre un nouveau quizz !*")
-            else:
-                countdown_placeholder.write(f"### Cooldown en cours\nVous pouvez soumettre à nouveau dans **:blue[{st.session_state.time_remaining}]** secondes.")
-            
-            # Met à jour toutes les 1 seconde
-            time.sleep(1)
-    else:
-        st.write("Vous pouvez soumettre un nouveau quizz !")  
-# Définir le cooldown en secondes
-
-
-
-def submit_quiz():
-    """Gère la soumission du quiz et met à jour le temps de la dernière soumission."""
-    st.session_state.last_submission_time = time.time()
-    st.session_state.can_submit = False
-    st.session_state.time_remaining = COOLDOWN_TIME
-    st.success("Quiz soumis avec succès!")
-
-# Charger les données des questions depuis le fichier JSON
-with open('questions_data.json', 'r') as f:
-    questions_data = json.load(f)
-
-    # Fonction pour obtenir les détails du profil public
-def get_public_profile(username):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('SELECT SUM(score) FROM scores WHERE username=?', (username,))
-    total_points = c.fetchone()[0] or 0
-    c.execute('SELECT COUNT(DISTINCT question_id) FROM user_answers WHERE username=?', (username,))
-    quizzes_completed = c.fetchone()[0] or 0
-    conn.close()
-    return total_points, quizzes_completed
-
-
-# Fonction pour se connecter à la base de données
-def get_db_connection():
-    conn = sqlite3.connect('quiz_app.db')
-    return conn
-
-# Fonction pour vérifier les identifiants
-def authenticate_user(username, password):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('SELECT * FROM users WHERE username=? AND password=?', (username, hashlib.sha256(password.encode()).hexdigest()))
-    user = c.fetchone()
-    conn.close()
-    return user is not None
-
-# Fonction pour enregistrer un nouvel utilisateur
-def register_user(username, password):
-    conn = get_db_connection()
-    c = conn.cursor()
-    try:
-        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashlib.sha256(password.encode()).hexdigest()))
-        conn.commit()
-        result = True
-    except sqlite3.IntegrityError:
-        result = False
-    conn.close()
-    return result
-
-def save_score(username, score):
-     if username != "invité":  # Ne pas enregistrer le score pour les invités
-         conn = get_db_connection()
-         c = conn.cursor()
-         c.execute('INSERT INTO scores (username, score) VALUES (?, ?)', (username, score))
-         conn.commit()
-         conn.close()
-
-
-# Fonction pour obtenir le leaderboard
-def get_leaderboard():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('''
-        SELECT username, SUM(score) as total_score
-        FROM scores
-        GROUP BY username
-        ORDER BY total_score DESC
-    ''')
-    leaderboard = c.fetchall()
-    conn.close()
-    return leaderboard
-
-
-# Fonction pour obtenir les détails du compte
-def get_account_details(username):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('SELECT SUM(score) FROM scores WHERE username=?', (username,))
-    total_points = c.fetchone()[0] or 0
-    c.execute('SELECT COUNT(DISTINCT question_id) FROM user_answers WHERE username=?', (username,))
-    quizzes_completed = c.fetchone()[0] or 0
-    c.execute('SELECT MAX(timestamp) FROM user_sessions WHERE username=?', (username,))
-    last_session_time = c.fetchone()[0]
-    conn.close()
-    
-    # Calcul du temps total passé
-    if last_session_time:
-        time_spent = (time.time() - last_session_time) / 3600  # en heures
-    else:
-        time_spent = 0
-    
-    return total_points, quizzes_completed, time_spent
-
-
-
-# Fonction pour afficher les questions et vérifier les réponses
-def display_questions(questions, username):
-    user_answers = {}
-    correct_answers = {}
-    
-    # Collecte des réponses utilisateur
-    for idx, q in enumerate(questions):
-        q_type = q.get("type")
-        question = q.get("question")
-        if q_type == "mcq":
-            options = q.get("options")
-            user_answers[idx] = st.radio(question, options, key=idx)
-            correct_answers[idx] = q.get("answer")
-        elif q_type == "true_false":
-            user_answers[idx] = st.radio(question, ["Vrai", "Faux"], key=idx)
-            correct_answers[idx] = q.get("answer")
-        elif q_type == "fill_in":
-            user_answers[idx] = st.text_input(question, key=idx)
-            correct_answers[idx] = q.get("answer")
-    
-
-    # Vérifier les réponses et afficher les résultats
-    ##if st.button("Vérifier les réponses"):
-        score = 0
-        total_questions = len(questions)
-        correct_count = 0
-        incorrect_count = 0
-        
-        st.write("### Résultats")
-        for idx, q in enumerate(questions):
-            q_type = q.get("type")
-            question = q.get("question")
-            correct_answer = correct_answers.get(idx)
-            user_answer = user_answers.get(idx)
-            
-            if q_type == "mcq":
-                is_correct = user_answer == correct_answer
-            elif q_type == "true_false":
-                is_correct = user_answer == correct_answer
-            elif q_type == "fill_in":
-                if not user_answer.strip():
-                    user_answer = "Aucune"
-                is_correct = user_answer.strip().lower() == correct_answer.lower()
-            
-            if is_correct:
-                score += 1
-                correct_count += 1
-                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:green;'>Votre réponse est correcte.</span>", unsafe_allow_html=True)
-            else:
-                incorrect_count += 1
-                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:red;'>Votre réponse : `{user_answer}` - Réponse correcte : `{correct_answer}`</span>", unsafe_allow_html=True)
-        
-        # Enregistrement du score
-        save_score(username, score)
-        
-        # Affichage du score avec une barre de progression
-        st.write("### Votre Score")
-        score_percentage = (score / total_questions) * 100
-        st.write(f"**Score:** {score}/{total_questions}")
-        st.write(f"**Pourcentage de bonnes réponses:** {score_percentage:.2f}%")
-        st.progress(score_percentage / 100)
-
-        # Affichage du nombre de réponses correctes et incorrectes
-        st.write(f"**Réponses correctes:** {correct_count}")
-        st.write(f"**Réponses incorrectes:** {incorrect_count}")
-
-def display_public_profile(username):
-    total_points, quizzes_completed, _ = get_account_details(username)
-    leaderboard = get_leaderboard()
-    rank = next((i + 1 for i, (user, _) in enumerate(leaderboard) if user == username), "N/A")
-    
-    st.header(f"Profil public de {username}")
-    st.write(f"**Points totaux :** {total_points}")
-    st.write(f"**Nombre de quiz complétés :** {quizzes_completed}")
-    st.write(f"**Position dans le leaderboard :** {rank}")
-
-
+# Interface utilisateur Streamlit
 def main():
-    st.title("Apprentissage collaboratif")
-    
-    
-    # Initialisation de st.session_state.username
-    if "username" not in st.session_state:
-        st.session_state.username = None
+    st.title(":blue[Learn]")
 
-
-            
-    
-    if 'logged_in' not in st.session_state:
-     st.session_state.logged_in = False
-     st.write(f"Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des quiz communautaires, et s'entraider dans le domaine de la santé ! *Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
-     st.write(f":blue-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !] **Aussi, une fois arrivé sur la page des questions, vous accéderez au menu déroulant dans la sidebar en cliquant sur : ➤ en haut à gauche de votre écran**")
-    if st.session_state.logged_in:
-     username = get_account_details(st.session_state.username)
-     st.success(f"Bienvenue, vous êtes connecté en tant que **{st.session_state.username}**")
-    # Afficher la page principale (Quiz, etc.)
-      # Assurez-vous d'avoir une fonction pour la page principale
-    else:
+# Gestion de l'authentification
+    if 'username' not in st.session_state:  
+     st.session_state.username = None
      
-     show_login_page()  # Affichez le formulaire de connexion ou d'inscription
+    choice = None
 
-    # Afficher le leaderboard avant connexion
-    if not st.session_state.username:
-        st.write("### Leaderboard")
-        leaderboard = get_leaderboard()
-        leaderboard_df = pd.DataFrame(leaderboard, columns=['Username', 'Total Points'])
-        leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
-        leaderboard_df = leaderboard_df.head(10)
-        st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
-        
-        # Barre latérale avec options de connexion et d'inscription
-        
-        
-
-    # Partie principale (contenu du quiz et des questions) au centre de la page
-    if st.session_state.username:
-        with st.sidebar:
-            menu_option = st.selectbox(
-                "Menu",
-                ["Quiz", "Voir mon compte", "Contribuer aux questions", "Déconnexion", "Contacter le développeur"]
-            )
-        
-        if menu_option == "Déconnexion":
-            st.session_state.username = None
-            st.success("Vous êtes déconnecté. ***:red[Veuillez recharger cette page une fois la déconnexion faite ! (avec f5 ou en swipant en haut)]***")
-            st.write("Redirection en cours...")
-        
-        elif menu_option == "Quiz":
-            st.write("### Sélectionnez un système")
-            system_choice = st.selectbox("Choisissez un système", ["Système osseux", "Système circulatoire", "Système respiratoire", "Système nerveux"])
-            
-            if system_choice:
-                st.write("### Sélectionnez un sous-système")
-                sub_system_choice = st.selectbox("Choisissez un sous-système", list(questions_data[system_choice].keys()))
-            
-            if sub_system_choice:
-             question_source = st.radio("Sélectionnez la source des questions",[":green[Questions vérifiées]", ":blue[Questions de la communauté]"],captions=["Questions créées par le développeur, vérifiées et sûres","Questions faites par les membres de la communauté, potentiellemment troll ou inexactes"],)
-
-            if question_source == ":green[Questions vérifiées]":
-                    questions = questions_data[system_choice][sub_system_choice]
+    if st.session_state.username is None:
+      st.title("Apprentissage collaboratif")
+      st.subheader(":blue[Connexion]")
+      username = st.text_input("Nom d'utilisateur", key="login_username")
+      password = st.text_input("Mot de passe", type="password", key="login_password")
+      if st.button(":blue[Se connecter]"):
+            if verify_user(username, password):
+                st.session_state.username = username
+                st.success("Connexion réussie!")
+                st.rerun()
             else:
-                    community_questions = load_community_questions()
-                    questions = community_questions.get(system_choice, {}).get(sub_system_choice, [])
-
-                # Vérification s'il y a des questions disponibles
-            if questions:
-                    st.write(f"##### Questions chargées depuis la base de données  : :blue[{sub_system_choice}] - :blue[{system_choice}] :")
-                    
-                    # Boucle sur les questions de la communauté pour les afficher
-
-                    display_cooldown()
-                    
-                    if st.session_state.can_submit:
-                        display_questions(questions, st.session_state.username)
-                        if st.button("Soumettre le quiz"):
-                            submit_quiz()
-                            
-                    else:
-                        st.write("Vous devez attendre avant de pouvoir soumettre à nouveau.")
+                st.error("Nom d'utilisateur ou mot de passe incorrect")
+                
+      st.subheader(":green[Inscription]")
+      new_username = st.text_input("Nom d'utilisateur", key="signup_username")
+      new_password = st.text_input("Mot de passe", type="password", key="signup_password")
+      domain = st.selectbox("Domaine d'étude", ["Médecine", "Paramédical", "Autre"])
+      study_level = st.text_input("Niveau d'étude (ex: Première année)")
+      if st.button(":green[S'inscrire]"):
+            if create_user(new_username, new_password, domain, study_level):
+                st.success("Compte créé avec succès! Vous pouvez maintenant vous connecter.")
             else:
-                    st.info("Aucune question disponible pour cette sélection.")
+                st.error("Ce nom d'utilisateur existe déjà")
 
-
-
-
-
-
-        elif menu_option == "Contribuer aux questions":
-            st.header("Contribuer aux questions")
-            contribute_questions()
-
-        elif menu_option == "Voir mon compte":
-            total_points, quizzes_completed, time_spent = get_account_details(st.session_state.username)
-            st.header("Détails de mon compte")
-            st.write(f"**Nom d'utilisateur :** {st.session_state.username}")
-            st.write(f"**Points totaux :** {total_points}")
-            st.write(f"**Nombre de quiz complétés :** {quizzes_completed}")
-            st.write(f"**Temps total passé sur le site :** {time_spent:.2f} heures")
-
-            st.write("### Voir un profil public")
-            public_username = st.text_input("Entrez le nom d'utilisateur pour voir le profil public")
-            
-            if st.button("Afficher le profil"):
-                if public_username:
-                    public_total_points, public_quizzes_completed = get_public_profile(public_username)
-                    st.write(f"**Nom d'utilisateur :** {public_username}")
-                    st.write(f"**Points totaux :** {public_total_points}")
-                    st.write(f"**Nombre de quiz complétés :** {public_quizzes_completed}")
-
-            with st.expander("Voir la leaderboard complète"):
-                leaderboard = get_leaderboard()
-                leaderboard_df = pd.DataFrame(leaderboard, columns=['Username', 'Total Points'])
-                leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
-                st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
-
-        elif menu_option == "Contacter le développeur":
-         show_contact_page()
-    
-    
-    st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
-
-
-def show_contact_page():
-    st.header("Contacter le Développeur")
-    
-    # Affichage du cooldown
-    display_cooldown()
-    
-    if st.session_state.can_submit:
-        with st.form(key='contact_form'):
-            name = st.text_input("Nom")
-            email = st.text_input("Email")
-            message = st.text_area("Message")
-            submit_button = st.form_submit_button(label="Envoyer")
-            
-            if submit_button:
-                if send_email(name, email, message):
-                    st.success("Votre message a été envoyé avec succès !")
-                    update_last_submission_time(st.session_state.username)
-                    st.session_state.can_submit = False  # Désactiver la soumission jusqu'au prochain cooldown
-                else:
-                    st.error("Erreur lors de l'envoi de votre message. Veuillez réessayer.")
     else:
-        st.write("Vous devez attendre avant de pouvoir soumettre à nouveau.")
+       menu = ["**:blue[Accueil]**", "**:blue[Quiz]**", "**:blue[Créer une question]**", "**:blue[Chat]**", "**:blue[Mon compte]**", "**:red[Déconnexion]**"]
+       menu_subtitles = [
+        "Page d'accueil et leaderboard",
+        "Commencer à apprendre",
+        "Ajouter une nouvelle question",
+        "Discuter avec d'autres utilisateurs",
+        "Accédez vos informations personnelles",
+        "Se déconnecter de l'application"
+    ]
+    
+       choice = custom_radio("Menu", menu, menu_subtitles)
 
 
+    if choice == "**:blue[Accueil]**":
+        st.success(f"Bienvenue, **{st.session_state.username}**!")
+        st.write(f"Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des quiz communautaires, et s'entraider dans le domaine de la santé !")
+        st.write("*Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
+        st.write(f"Vous pouvez naviguer sur le site grâce à la side bar, sur téléphone, elle est **:red[accessible en ouvrant la flèche en haut à gauche]** : ")
+        st.image("arrow.png")
+        st.write("Ensuite, **:red[naviguez sur les différents menus disponibles]** ! (cliquez comme sur l'image en dessous !)")
+        st.image("menu_1.png", width=250)
+    
+        display_leaderboard()
+    
+    elif choice == "**:blue[Chat]**":
+     display_chat()
+     
+    elif choice == "**:blue[Quiz]**":
+        st.subheader("Quiz")
+        domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
+        selected_domain = st.selectbox("Qu'est-ce que vous souhaitez réviser ?", domains)
 
-def contribute_questions():
-    # Initialisation des valeurs dans st.session_state si elles n'existent pas déjà
-    if 'question' not in st.session_state:
-        st.session_state['question'] = ""
-    if 'options' not in st.session_state:
-        st.session_state['options'] = ["", "", "", ""]
-    if 'correct_answers' not in st.session_state:
-        st.session_state['correct_answers'] = []
-    if 'answer' not in st.session_state:
-        st.session_state['answer'] = ""
-
-    def check_form_filled():
-        # Vérifie si n'importe quel champ a du texte
-        return (st.session_state['question'].strip() or
-                any(opt.strip() for opt in st.session_state['options']) or
-                st.session_state['answer'].strip() or
-                st.session_state['correct_answers'])
-
-    question_type = st.radio(
-        "Type de question",
-        ["mcq", "vrai_ou_faux", "fill_in"],
-        index=["mcq", "vrai_ou_faux", "fill_in"].index(st.session_state.get('question_type', 'mcq')),
-        format_func=lambda x: {
-            "mcq": ":blue[Question QCM] : choix multiple",
-            "vrai_ou_faux": ":blue[Question vrai ou faux] : choix entre les deux",
-            "fill_in": ":blue[Question quizz] : remplir la réponse avec du texte"
-        }[x]
-    )
-    st.session_state['question_type'] = question_type
-
-    system = st.selectbox("Système", list(questions_data.keys()))
-    subsystem = st.selectbox("Sous-système", list(questions_data[system].keys()))
-
-    # Champ de texte pour la question
-    question = st.text_input("Question", value=st.session_state['question'])
-    st.session_state['question'] = question
-
-    if question_type == "mcq":
-        # Options de réponse pour les questions à choix multiples
-        options = []
-        for i in range(4):
-            option = st.text_input(f"Option {i+1}", value=st.session_state['options'][i], key=f"option_{i+1}")
-            options.append(option)
-        st.session_state['options'] = options
-        
-        # Réponses correctes pour les questions à choix multiples
-        correct_answers = st.multiselect("Réponse(s) correcte(s)", options)
-        st.session_state['correct_answers'] = correct_answers
-        
-        question_data = {
-            "question": st.session_state['question'],
-            "options": st.session_state['options'],
-            "answer": correct_answers
+        subdomains = {
+            "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
+            "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
+            "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
+            "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
+            "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
+            "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
+            "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
         }
-    
-    elif question_type == "vrai_ou_faux":
-        # Radio buttons pour les réponses vrai ou faux
-        selected_answer = st.radio("Réponse correcte", ["Vrai", "Faux"], key='answer')
+
+        selected_subdomain = st.selectbox("Choisissez un sous-domaine", subdomains[selected_domain])
+
+        if selected_domain == "Anatomie":
+            subsystems = {
+                "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
+                "Système circulatoire": ["Cœur", "Artères", "Veines"],
+                "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
+                "Système urinaire": ["Reins", "Vessie", "Urètres"],
+                "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
+            }
+            selected_subsystem = st.selectbox("Choisissez un sous-système", subsystems[selected_subdomain])
+        else:
+            selected_subsystem = None
+
+
+        question_type = st.radio("Sélectionnez la source des questions",[":green[Questions vérifiées]", ":blue[Questions de la communauté]"],captions=["Questions créées par le développeur, vérifiées et sûres","Questions faites par les membres de la communauté, potentiellemment troll ou inexactes"],)
+        if question_type == ":green[Questions vérifiées]":
+            questions = load_questions(selected_domain, selected_subdomain, selected_subsystem, "official")
+        else:
+            questions = load_questions(selected_domain, selected_subdomain, selected_subsystem, "community")
+
+        if not questions:
+            st.warning("Aucune question disponible pour cette sélection.")
+        else:
+            # Affichage et gestion des questions
+            score = 0
+            total_questions = len(questions)
+            user_answers = []
+
+            for i, question in enumerate(questions):
+                st.subheader(f"Question {i+1}")
+                st.write(question["question"])
+
+                if question["type"] == "QCM":
+                    user_answer = st.radio(f"Choisissez la bonne réponse pour la question {i+1}:", question["options"])
+                elif question["type"] == "Vrai/Faux":
+                    user_answer = st.radio(f"Choisissez la bonne réponse pour la question {i+1}:", ["Vrai", "Faux"])
+                else:  # Réponse courte
+                    user_answer = st.text_input(f"Votre réponse pour la question {i+1}:")
+
+                user_answers.append(user_answer)
+
+                st.write("---")  # Séparateur entre les questions
+
+            if st.button("Terminer le quiz"):
+                for i, (question, user_answer) in enumerate(zip(questions, user_answers)):
+                    if user_answer.lower() == question["correct_answer"].lower():
+                        score += 1
+                        st.success(f"Question {i+1}: Correct!")
+                    else:
+                        st.error(f"Question {i+1}: Incorrect. La bonne réponse était: {question['correct_answer']}")
+                    st.write(f"Explication: {question['explanation']}")
+                    st.write("---")
+
+                st.success(f"Quiz terminé! Votre score: {score}/{total_questions}")
+                update_user_stats(st.session_state.username, points=score, quizzes_completed=1)
+
+    elif choice == "**:blue[Créer une question]**":
+        st.subheader("Créer une nouvelle question")
+        domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
+        domain = st.selectbox("Domaine", domains)
         
-        question_data = {
-            "question": st.session_state['question'],
-            "answer": selected_answer
+        subdomains = {
+            "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
+            "Physiologie": ["Système cardiovasculaire", "Système respiratoire", "Système digestif"],
+            "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
+            "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
+            "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
+            "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
+            "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
         }
-    
-    elif question_type == "fill_in":
-        # Champ de texte pour la réponse à remplir
-        answer = st.text_input("Remplir la réponse", value=st.session_state['answer'], key='fill_in')
         
-        question_data = {
-            "question": st.session_state['question'],
-            "answer": answer
-        }
-    
-    # Activation du bouton de soumission seulement si un des champs est rempli
-    submit_button = st.button(
-        ":green[Envoyer ma question]",
-        disabled=not check_form_filled()
-    )
-    
-    if submit_button and check_form_filled():
-        add_community_question(system, subsystem, question_type.lower().replace(" ", "_"), question_data)
-        st.success("Votre question a été ajoutée avec succès!")
-
-
+        subdomain = st.selectbox("Sous-domaine", subdomains[domain])
         
+        if domain == "Anatomie":
+            subsystems = {
+                "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
+                "Système circulatoire": ["Cœur", "Artères", "Veines"],
+                "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
+                "Système urinaire": ["Reins", "Vessie", "Urètres"],
+                "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
+            }
+            subsystem = st.selectbox("Sous-système", subsystems[subdomain])
+        else:
+            subsystem = None
         
+        question_type = st.selectbox("Type de question", ["QCM", "Vrai/Faux", "Réponse courte"])
+        question_text = st.text_area("Question")
         
+        if question_type == "QCM":
+            options = []
+            for i in range(4):
+                option = st.text_input(f"Option {i+1}")
+                options.append(option)
+            correct_answer = st.selectbox("Réponse correcte", options)
+        elif question_type == "Vrai/Faux":
+            options = ["Vrai", "Faux"]
+            correct_answer = st.selectbox("Réponse correcte", options)
+        else:
+            correct_answer = st.text_input("Réponse correcte")
         
+        explanation = st.text_area("Explication")
         
-        
-        
-        
-        
-
-def save_user_answers(username, question_id, answer, is_correct):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('INSERT INTO user_answers (username, question_id, answer, is_correct) VALUES (?, ?, ?, ?)', 
-          (username, question_id, answer, is_correct))
-    conn.commit()
-    conn.close()
-
-
-
-
-def display_questions(questions, username):
-    user_answers = {}
-    correct_answers = {}
-    
-
-    for idx, q in enumerate(questions):
-        q_type = q.get("type")
-        question = q.get("question")
-        if q_type == "mcq":
-            options = q.get("options")
-            user_answers[idx] = st.radio(question, options, key=idx)
-            correct_answers[idx] = q.get("answer")
-        elif q_type == "vrai_ou_faux" or q_type == "true_false":
-            user_answers[idx] = st.radio(question, ["Vrai", "Faux"], key=idx)
-            correct_answers[idx] = q.get("answer")
-        elif q_type == "fill_in":
-            user_answers[idx] = st.text_input(question, key=idx)
-            correct_answers[idx] = q.get("answer")
-    
-    # Vérification des réponses et affichage des résultats
-
-    # Vérification des réponses et affichage des résultats
-    if st.button("Voir la correction"):
-        score = 0
-        total_questions = len(questions)
-        st.write("### Résultats")
-        
-        for idx, q in enumerate(questions):
-            question = q.get("question")
-            correct_answer = correct_answers.get(idx)
-            user_answer = user_answers.get(idx)
+        if st.button("Soumettre la question"):
+            new_question = {
+                "domain": domain,
+                "subdomain": subdomain,
+                "subsystem": subsystem,
+                "type": question_type,
+                "question": question_text,
+                "options": options if question_type == "QCM" else None,
+                "correct_answer": correct_answer,
+                "explanation": explanation
+            }
             
-            # Validation de la réponse en fonction du type de question
-            if q.get("type") == "mcq":
-                is_correct = user_answer == correct_answer
-            elif q.get("type") == "vrai_ou_faux" or q.get("type") == "true_false":
-                is_correct = user_answer == correct_answer
-            elif q.get("type") == "fill_in":
-                is_correct = user_answer.strip().lower() == correct_answer.strip().lower()
+            add_question_to_json(new_question, "community")
+            st.success("Question ajoutée avec succès !")
             
-            # Affichage des résultats
-            if is_correct:
-                score += 1
-                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:green;'>Correct</span>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"**Question {idx + 1}:** {question} - <span style='color:red;'>Incorrect, Réponse correcte : `{correct_answer}`</span>", unsafe_allow_html=True)
-
+    elif choice == "Contact":
+            st.subheader("Contactez-nous")
             
-                    # Enregistrement du score
-        save_score(username, score)
-        
-        st.write("### Votre Score")
-        score_percentage = (score / total_questions) * 100
-        st.write(f"**Score:** {score}/{total_questions}")
-        st.write(f"**Pourcentage de bonnes réponses:** {score_percentage:.2f}%")
-        st.progress(score_percentage / 100)
+  
+    elif choice == "**:blue[Mon compte]**":
+     if st.session_state.username:
+            display_account_details(st.session_state.username)
+     else:
+            st.warning("Vous devez être connecté pour accéder à cette page.")
+    
 
+    if choice == "**:red[Déconnexion]**":
+        st.session_state.username = None
+        st.success("Vous avez été déconnecté.")
+        st.rerun()
 
-        st.write("### Leaderboard")
-        leaderboard = get_leaderboard()
-        leaderboard_df = pd.DataFrame(leaderboard, columns=['Username', 'Total Points'])
-        leaderboard_df = leaderboard_df.rename_axis('Rank').reset_index()
-        leaderboard_df = leaderboard_df.head(10)
-        st.write(leaderboard_df.style.apply(lambda x: ['background-color: gold' if i == 0 else 'background-color: silver' if i == 1 else 'background-color: #cd7f32' if i == 2 else '' for i in x.index], axis=1))
-            
 
 if __name__ == "__main__":
     main()
+    
+   
