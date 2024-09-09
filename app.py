@@ -9,6 +9,7 @@ from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
+import threading
 
 # Constantes
 COOLDOWN_TIME = 15
