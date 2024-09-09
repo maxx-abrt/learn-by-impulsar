@@ -14,6 +14,17 @@ import os
 COOLDOWN_TIME = 15
 
 
+def ping_app():
+    while True:
+        try:
+            requests.get("https://learn.impulsarstudios.xyz")
+            time.sleep(300)  # Attendre 5 minutes
+        except:
+            pass
+
+# Démarrer le thread de ping en arrière-plan
+threading.Thread(target=ping_app, daemon=True).start()
+
 
 
 def get_top_users(limit=10):
