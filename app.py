@@ -9,10 +9,25 @@ from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
+import threading
+
+
+
+
 
 # Constantes
 COOLDOWN_TIME = 15
 
+def ping_app():
+    while True:
+        try:
+            requests.get("https://learn.impulsarstudios.xyz")
+            time.sleep(300)  # Attendre 5 minutes
+        except:
+            pass
+
+# Démarrer le thread de ping en arrière-plan
+threading.Thread(target=ping_app, daemon=True).start()
 
 # Fonction pour récupérer les messages du chat
 def get_messages():
