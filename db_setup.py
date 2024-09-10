@@ -59,17 +59,28 @@ def init_db():
         domain TEXT NOT NULL,
         study_level TEXT NOT NULL,
         points INTEGER DEFAULT 0,
+        community_points INTEGER DEFAULT 0,
         quizzes_completed INTEGER DEFAULT 0,
         registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 ''')
     
+    # Ajoutez cette ligne au script db_setup.py dans la définition de la table users
+    c.execute('''
+    ALTER TABLE users ADD COLUMN community_points INTEGER DEFAULT 0;
+    ''')
+
+
+
     
-    c.execute('''CREATE TABLE IF NOT EXISTS chat_messages
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT,
-                  message TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        message TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
     conn.commit()
     conn.close()
 

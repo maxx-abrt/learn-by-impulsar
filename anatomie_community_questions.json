@@ -104,5 +104,30 @@
     ],
     "correct_answer": "",
     "explanation": ""
+  },
+  {
+    "domain": "Anatomie",
+    "subdomain": "Syst\u00e8me osseux",
+    "subsystem": "Cr\u00e2ne",
+    "type": "QCM",
+    "question": "",
+    "options": [
+      "",
+      "",
+      "",
+      ""
+    ],
+    "correct_answer": "",
+    "explanation": ""
+  },
+  {
+    "domain": "Anatomie",
+    "subdomain": "Syst\u00e8me circulatoire",
+    "subsystem": "C\u0153ur",
+    "type": "Vrai/Faux",
+    "question": "",
+    "options": null,
+    "correct_answer": "Vrai",
+    "explanation": ""
   }
 ]

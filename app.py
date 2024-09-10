@@ -9,21 +9,22 @@ from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
-import threading
 
 # Constantes
 COOLDOWN_TIME = 15
 
-def ping_app():
-    while True:
-        try:
-            requests.get("https://learn.impulsarstudios.xyz")
-            time.sleep(300)  # Attendre 5 minutes
-        except:
-            pass
 
-# Démarrer le thread de ping en arrière-plan
-threading.Thread(target=ping_app, daemon=True).start()
+# Fonction pour récupérer les messages du chat
+def get_messages():
+    conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT username, message, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT 30")
+    messages = c.fetchall()
+    conn.close()
+    return messages[::-1]  # Inverser l'ordre pour afficher les messages les plus récents en bas
+
+
+
 
 
 
@@ -246,18 +247,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         st.rerun()
         
         
-        
-
-
-    # Mise à jour initiale des messages
-    update_messages()
+  
 
     while True:
             time.sleep(4.5)
             update_messages()
             st.rerun()
-
-
 
 
 
@@ -283,6 +278,9 @@ def init_chat_db():
     conn.commit()
     conn.close()
 
+
+
+
 # Fonction pour ajouter un message au chat
 def add_message(username, message):
     conn = sqlite3.connect('quiz_app.db')
@@ -291,26 +289,28 @@ def add_message(username, message):
     conn.commit()
     conn.close()
 
-# Fonction pour récupérer les messages du chat
-def get_messages():
+
+
+
+
+def change_username(old_username, new_username):
     conn = sqlite3.connect('quiz_app.db')
     c = conn.cursor()
-    c.execute("SELECT username, message, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT 30")
-    messages = c.fetchall()
-    conn.close()
-    return messages[::-1]  # Inverser l'ordre pour afficher les messages les plus récents en bas
-
-
-
-
+    try:
+        c.execute("UPDATE users SET username=? WHERE username=?", (new_username, old_username))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
 
 
 
 
 
 def display_account_details(username):
-    st.subheader(f"Compte de {username}")
-    
+
     conn = sqlite3.connect('quiz_app.db')
     c = conn.cursor()
     c.execute("SELECT points, quizzes_completed, domain, study_level, registration_date FROM users WHERE username=?", (username,))
@@ -320,12 +320,12 @@ def display_account_details(username):
     if user_data:
         points, quizzes_completed, domain, study_level, registration_date = user_data
         
-        st.write(f"**Nom d'utilisateur:** {username}")
-        st.write(f"**Points obtenus aux QCM:** {points}")
-        st.write(f"**Nombre de quiz complétés:** {quizzes_completed}")
-        st.write(f"**Domaine d'étude:** {domain}")
-        st.write(f"**Niveau d'étude:** {study_level}")
-        st.write(f"**Date d'inscription:** {registration_date}")
+        st.write(f"**Votre nom d'utilisateur:** :blue[{username}]")
+        st.write(f"**Points obtenus aux QCM:** :blue[{points}]")
+        st.write(f"**Nombre de quiz complétés:** :blue[{quizzes_completed}]")
+        st.write(f"**Domaine d'étude:** :blue[{domain}]")
+        st.write(f"**Niveau d'étude:** :blue[{study_level}]")
+        st.write(f"**Date d'inscription:** :blue[{registration_date}]")
         
         # Vous pouvez ajouter d'autres statistiques ici si nécessaire
     else:
@@ -371,6 +371,29 @@ def initialize_question_files():
 
 
 
+def discover_page():
+
+     st.title("Découvrir")
+     username_query = st.text_input("Rechercher un utilisateur par nom:")
+     if st.button("Rechercher"):
+
+      if username_query:
+            conn = sqlite3.connect('quiz_app.db')
+            c = conn.cursor()
+            c.execute("SELECT username, points, quizzes_completed, community_points FROM users WHERE username LIKE ?", ('%' + username_query + '%',))
+            user_info = c.fetchall()
+            conn.close()
+
+            if user_info:
+                for user in user_info:
+                    with st.container(border=True):
+                     st.write(f"**Nom/Pseudo**: **:blue[{user[0]}]**")
+                     st.write(f"**Points Quizz**: **:blue[{user[1]}]**")
+                     st.write(f"**Quizz Completés**: **:blue[{user[2]}]**")
+                     st.write(f"**Points Communautaires** (*nombre de questions soumises aux quizs communautaires*): **:blue[{user[3]}]**")
+            else:
+                st.warning("Utilisateur non trouvé.")
+
 
 
 
@@ -397,6 +420,12 @@ def hash_password(password):
 
 def create_user(username, password, domain, study_level):
     conn = sqlite3.connect('quiz_app.db')
+    c = conn.cursor()
+    c.execute("SELECT username FROM users WHERE username=?", (username,))
+    if c.fetchone():
+        return False  # Username exists
+    # Continue with user creation if it does not exist
+
     c = conn.cursor()
     hashed_password = hash_password(password)
     try:
@@ -538,7 +567,7 @@ def custom_radio(label, options, subtitles):
     for i, (option, subtitle) in enumerate(zip(options, subtitles)):
         if st.sidebar.button(option, key=f"nav_{i}"):
             st.session_state.page = option
-    st.sidebar.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en python 🐍")
+    st.sidebar.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en **:green[python]** 🐍 avec **:red[streamlit]** et **:grey[perplexity]**")
     st.sidebar.markdown('</div>', unsafe_allow_html=True)
     return st.session_state.get('page', options[0])
 
@@ -578,13 +607,14 @@ def main():
                 st.error("Ce nom d'utilisateur existe déjà")
 
     else:
-       menu = ["**:blue[Accueil]**", "**:blue[Quiz]**", "**:blue[Créer une question]**", "**:blue[Chat]**", "**:blue[Mon compte]**", "**:red[Déconnexion]**"]
+       menu = ["**:blue[Accueil]**", "**:blue[Quiz]**", "**:blue[Créer une question]**", "**:blue[Chat]**", "**:blue[Mon compte]**", "**:blue[découvrir]**", "**:red[Déconnexion]**"]
        menu_subtitles = [
         "Page d'accueil et leaderboard",
         "Commencer à apprendre",
         "Ajouter une nouvelle question",
         "Discuter avec d'autres utilisateurs",
         "Accédez vos informations personnelles",
+        "Découvrir les autres utilisateurs",
         "Se déconnecter de l'application"
     ]
     
@@ -601,9 +631,11 @@ def main():
         st.image("menu_1.png", width=250)
     
         display_leaderboard()
-    
-    elif choice == "**:blue[Chat]**":
-     display_chat()
+        
+    elif choice == "**:red[Déconnexion]**":
+        st.session_state.username = None
+        st.success("Vous avez été déconnecté.")
+        st.rerun() 
      
     elif choice == "**:blue[Quiz]**":
         st.subheader("Quiz")
@@ -678,7 +710,10 @@ def main():
                 update_user_stats(st.session_state.username, points=score, quizzes_completed=1)
 
     elif choice == "**:blue[Créer une question]**":
-        st.subheader("Créer une nouvelle question")
+      if 'username' not in st.session_state or st.session_state.username is None:
+        st.warning("Vous devez être connecté pour pouvoir créer une question.")
+    
+      else:
         domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
         domain = st.selectbox("Domaine", domains)
         
@@ -708,6 +743,9 @@ def main():
         
         question_type = st.selectbox("Type de question", ["QCM", "Vrai/Faux", "Réponse courte"])
         question_text = st.text_area("Question")
+        st.write("⬆ Le champ question est à remplir :red[obligatoirement] ⬆")
+                
+        
         
         if question_type == "QCM":
             options = []
@@ -723,39 +761,63 @@ def main():
         
         explanation = st.text_area("Explication")
         
-        if st.button("Soumettre la question"):
-            new_question = {
-                "domain": domain,
-                "subdomain": subdomain,
-                "subsystem": subsystem,
-                "type": question_type,
-                "question": question_text,
-                "options": options if question_type == "QCM" else None,
-                "correct_answer": correct_answer,
-                "explanation": explanation
-            }
-            
-            add_question_to_json(new_question, "community")
-            st.success("Question ajoutée avec succès !")
-            
-    elif choice == "Contact":
-            st.subheader("Contactez-nous")
-            
+          
+        if question_text.strip():  # Assurez-vous que la question n'est pas vide
+            if st.button("Soumettre la question"):
+                new_question = {
+                    "domain": domain,
+                    "subdomain": subdomain,
+                    "subsystem": subsystem,
+                    "type": question_type,
+                    "question": question_text,
+                    "options": options if question_type == "QCM" else None,
+                    "correct_answer": correct_answer,
+                    "explanation": explanation
+                }
+                add_question_to_json(new_question, "community")
+
+                # Assumer que l’utilisateur connecté est stocké dans st.session_state
+                username = st.session_state.username
+                # Mise à jour des points de contribution communautaires
+                conn = sqlite3.connect('quiz_app.db')
+                c = conn.cursor()
+                c.execute("UPDATE users SET community_points = community_points + 1 WHERE username=?", (username,))
+                conn.commit()
+                conn.close()
+
+                st.success("Question ajoutée et points de contribution mis à jour!")
+        else:
+             st.error("La question ne peut pas être vide (Le champ **:blue[Question]** tout au dessus, ensuite remplissez vos champs d'entrée et configurez votre question).")
+
+    if choice == "**:blue[Chat]**":
+        display_chat()
+  
   
     elif choice == "**:blue[Mon compte]**":
      if st.session_state.username:
-            display_account_details(st.session_state.username)
-     else:
-            st.warning("Vous devez être connecté pour accéder à cette page.")
-    
+            with st.container(border=True):
+             display_account_details(st.session_state.username)
+     new_username = st.text_input("Nouveau nom d'utilisateur", key="new_username")
+     if st.button("Changer le nom d'utilisateur"):
+     
+      if new_username:
+       if change_username(st.session_state.username, new_username):
+            st.success("Nom d'utilisateur mis à jour avec succès!")
+            st.session_state.username = new_username  # Mettre à jour la session
+      else:
+            st.error("Ce nom d'utilisateur existe déjà, veuillez en choisir un autre.")
 
-    if choice == "**:red[Déconnexion]**":
-        st.session_state.username = None
-        st.success("Vous avez été déconnecté.")
-        st.rerun()
+
+    
+    
+    if choice == "**:blue[découvrir]**":
+      discover_page()
+
+
+
+
 
 
 if __name__ == "__main__":
     main()
-    
    
