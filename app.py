@@ -86,8 +86,21 @@ def display_leaderboard():
 
 
 
-
-
+def update_messages():
+    messages = get_messages()
+    for i, (username, msg, timestamp) in enumerate(reversed(messages)):
+        domain = get_user_domain(username)
+        time_str = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        message_class = 'message new' if i == 0 else 'message'
+        st.markdown(f"""
+        <div class='{message_class}' id='message-{i}'>
+            <span class='username'>{username}</span>
+            <span class='domain'>({domain})</span>
+            <span class='timestamp'>{time_str}</span>
+            <br>{msg}
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("---")
 
 
 def display_chat():
@@ -179,19 +192,7 @@ def display_chat():
     if 'messages' not in st.session_state:
         st.session_state.messages = get_messages()
 
-    # Affichage des messages
-    for i, (username, msg, timestamp) in enumerate(reversed(st.session_state.messages)):
-        time_str = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
-        domain = get_user_domain(username)
-        message_class = 'message new' if i == 0 else 'message'
-        st.markdown(f"""
-        <div class='{message_class}' id='message-{i}'>
-            <span class='username'>{username}</span>
-            <span class='domain'>({domain})</span>
-            <span class='timestamp'>{time_str}</span>
-            <br>{msg}
-        </div>
-        """, unsafe_allow_html=True)
+
 
     # Script JavaScript pour l'animation
     st.markdown(
@@ -229,6 +230,36 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 </script>
 """, unsafe_allow_html=True)
+    
+    
+    update_messages()
+    
+    
+    # Mise à jour périodique
+    if 'update_counter' not in st.session_state:
+        st.session_state.update_counter = 0
+    
+    st.session_state.update_counter += 1
+    if st.session_state.update_counter % 10 == 0:  # Mise à jour toutes les 2.5 secondes (10 * 0.25s)
+        update_messages()
+        time.sleep(0.25)
+        st.rerun()
+        
+        
+        
+
+
+    # Mise à jour initiale des messages
+    update_messages()
+
+    while True:
+            time.sleep(4.5)
+            update_messages()
+            st.rerun()
+
+
+
+
 
 # Fonction pour récupérer le domaine d'étude de l'utilisateur
 def get_user_domain(username):
@@ -264,7 +295,7 @@ def add_message(username, message):
 def get_messages():
     conn = sqlite3.connect('quiz_app.db')
     c = conn.cursor()
-    c.execute("SELECT username, message, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT 50")
+    c.execute("SELECT username, message, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT 30")
     messages = c.fetchall()
     conn.close()
     return messages[::-1]  # Inverser l'ordre pour afficher les messages les plus récents en bas
