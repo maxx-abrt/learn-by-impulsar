@@ -10,11 +10,353 @@ import requests
 from dotenv import load_dotenv
 import os
 import threading
+import cloudinary
+import cloudinary.uploader
+from cloudinary.utils import cloudinary_url
+import uuid
+
+
+def create_sidebar():
+    with st.sidebar:
+        ##st.image("logo.png", width=100)  # Ajoutez votre logo
+        st.title("Menu")
+    
+        if 'page' not in st.session_state:
+         st.session_state.page = "Accueil"
+        # Créez des sections dans la sidebar
+        st.sidebar.markdown("### Apprentissage")
+        if st.sidebar.button("🏠 Accueil", key="home"):
+            st.session_state.page = "Accueil"
+        if st.sidebar.button("📚 Quiz", key="quiz"):
+            st.session_state.page = "Quiz"
+        if st.sidebar.button("📝 Créer un quiz", key="create_question"):
+            st.session_state.page = "Créer une question"
+        if st.sidebar.button("🖼️ Schémas", key="schemas"):
+            st.session_state.page = "Schémas"
+        if st.sidebar.button("➕ Ajouter un schéma", key="add_schema"):
+            st.session_state.page = "Ajouter un schéma"
+        
+        st.sidebar.markdown("### Communauté")
+        if st.sidebar.button("💬 Chat", key="chat"):
+            st.session_state.page = "Chat"
+        if st.sidebar.button("👥 Découvrir", key="discover"):
+            st.session_state.page = "découvrir"
+        
+        st.sidebar.markdown("### Compte")
+        if st.sidebar.button("👤 Mon compte", key="account"):
+            st.session_state.page = "Mon compte"
+        if st.sidebar.button("❤️ Nous soutenir", key="support"):
+            st.session_state.page = "Nous soutenir"
+        if st.sidebar.button("🚪 Déconnexion", key="logout"):
+            st.session_state.page = "Déconnexion"
+            
+        st.write("Développé avec ❤️ par [maxx.abrt](https://www.instagram.com/maxx.abrt/) en **:green[python]** 🐍 avec **:red[streamlit]** et **:grey[perplexity]**")
+
+    # Ajoutez un style personnalisé pour la sidebar
+    st.markdown("""
+        <style>
+        .sidebar .sidebar-content {
+            background-image: linear-gradient(#2e7bcf,#2e7bcf);
+            color: white;
+        }
+        .sidebar .sidebar-content .stButton>button {
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            background-color: transparent;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .sidebar .sidebar-content .stButton>button:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+    return st.session_state.page
+
+
+def load_schemas():
+    schemas_file = "schemas.json"
+    if os.path.exists(schemas_file):
+        with open(schemas_file, "r") as f:
+            schemas = json.load(f)
+        print("Schemas loaded:", schemas)  # Ajoutez cette ligne pour le débogage
+        return schemas
+    return []
+
+
+def display_help_button(page_name, location="top"):
+    help_texts = {
+        "Accueil": "Bienvenue sur la page d'accueil. Ici, vous pouvez voir le leaderboard et les informations générales sur la plateforme.",
+        "Quiz": "Sur cette page, vous pouvez sélectionner un domaine, un sous-domaine et un sous-système (pour l'anatomie) pour commencer un quiz.",
+        "Créer une question": "Ici, vous pouvez créer une nouvelle question pour la communauté. Choisissez le domaine, le type de question et remplissez les champs nécessaires.",
+        "Chat": "Le chat vous permet de discuter en temps réel avec d'autres utilisateurs de la plateforme.",
+        "Mon compte": "Consultez et modifiez vos informations personnelles sur cette page.",
+        "découvrir": "Découvrez d'autres utilisateurs et leurs contributions sur cette page.",
+        "Nous soutenir": "Vous pouvez nous soutenir en visualisant une publicité sur cette page.",
+        "Schémas": "Consultez et étudiez les schémas disponibles dans différents domaines.",
+        "Ajouter un schéma": "Contribuez à la communauté en ajoutant un nouveau schéma sur cette page."
+    }
+
+    if st.button("💡 Aide", key=f"help_button_{page_name}_{location}"):
+        st.info(help_texts.get(page_name, "Aide non disponible pour cette page."))
+
+
+# Fonction pour rechercher des schémas
+def search_schemas(schemas, query):
+    query = query.lower()
+    return [s for s in schemas if 
+            query in s.get("title", "").lower() or 
+            query in s.get("domain", "").lower() or 
+            query in s.get("subdomain", "").lower() or 
+            query in s.get("subsystem", "").lower() or 
+            any(query in element.lower() for element in s.get("elements", []))]
+load_dotenv()
+
+cloudinary.config( 
+        cloud_name = os.getenv('CLOUD_NAME'),
+        api_key = os.getenv('API_KEY'),
+        api_secret = os.getenv('API_SECRET'),
+        secure=True
+    )
+    
+def setup_cloudinary():
+ cloudinary.config( 
+        cloud_name = os.getenv('CLOUD_NAME'),
+        api_key = os.getenv('API_KEY'),
+        api_secret = os.getenv('API_SECRET'),
+        secure=True
+    )
+    
+def get_adsense_client_id():
+    return os.getenv('ADSENSE_CLIENT_ID')
 
 
 
+def upload_schema(file_content, file_name, domain, subdomain, subsystem=None):
+    random_filename = str(uuid.uuid4())
+    file_extension = os.path.splitext(file_name)[1]
+    new_filename = f"{random_filename}{file_extension}"
+    
+    try:
+        upload_result = cloudinary.uploader.upload(
+            file_content,
+            public_id=new_filename,
+            folder="schemas"
+        )
+        
+        schema_id = str(uuid.uuid4())
+        
+        schema_data = {
+            "id": schema_id,
+            "filename": new_filename,
+            "url": upload_result["secure_url"],
+            "domain": domain,
+            "subdomain": subdomain,
+            "subsystem": subsystem,
+            "elements": []
+        }
+        
+        return schema_data
+    except Exception as e:
+        st.error(f"Upload failed: {str(e)}")
+        return None
+    
+    
+def save_schema_data(schema_data, elements):
+    schema_data["elements"] = elements
+    schemas_file = "schemas.json"
+    
+    if os.path.exists(schemas_file):
+        with open(schemas_file, "r") as f:
+            schemas = json.load(f)
+    else:
+        schemas = []
+    
+    schemas.append(schema_data)
+    
+    with open(schemas_file, "w") as f:
+        json.dump(schemas, f, indent=2)
 
 
+def display_add_schema_page():
+    st.title("Ajouter un schéma")
+    
+    domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
+    domain = st.selectbox("Domaine", domains)
+    
+    subdomains = {
+        "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
+        "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
+        "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
+        "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
+        "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
+        "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
+        "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
+    }
+    subdomain = st.selectbox("Sous-domaine", subdomains[domain])
+    
+    subsystem = None
+    if domain == "Anatomie":
+        subsystems = {
+            "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
+            "Système circulatoire": ["Cœur", "Artères", "Veines"],
+            "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
+            "Système urinaire": ["Reins", "Vessie", "Urètres"],
+            "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
+        }
+        subsystem = st.selectbox("Sous-système", subsystems[subdomain])
+    
+    uploaded_file = st.file_uploader("Choisir une image", type=["png", "jpg", "jpeg"])
+    
+    if uploaded_file is not None:
+        file_details = {"FileName": uploaded_file.name, "FileType": uploaded_file.type, "FileSize": uploaded_file.size}
+        st.write(file_details)
+        
+        if uploaded_file.size > 10 * 1024 * 1024:  # 10 MB
+            st.error("Le fichier est trop volumineux. La taille maximale est de 10 MB.")
+        else:
+            st.image(uploaded_file)
+    
+    title = st.text_input("Titre du schéma")
+    st.write("***:red[Pensez à créer au moins une réponse possible avec le bouton 'Ajouter une réponse' en dessous !]***")
+    
+    # Initialisation de la liste des éléments dans la session state si elle n'existe pas
+    if 'schema_elements' not in st.session_state:
+        st.session_state.schema_elements = []
+    
+    # Boutons pour ajouter et retirer des fields
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(":green[Ajouter une réponse]"):
+            st.session_state.schema_elements.append("")
+    with col2:
+        if st.button(":red[Retirer une réponse]") and st.session_state.schema_elements:
+            st.session_state.schema_elements.pop()
+    
+    # Affichage et gestion des fields
+    for i, element in enumerate(st.session_state.schema_elements):
+        st.session_state.schema_elements[i] = st.text_input(f"Élément {i+1} :", value=element, key=f"element_{i}")
+    
+    if st.button("Soumettre le schéma"):
+        if uploaded_file and title and st.session_state.schema_elements:
+            file_content = uploaded_file.read()
+            schema_data = upload_schema(file_content, uploaded_file.name, domain, subdomain, subsystem)
+            if schema_data:
+                schema_data["title"] = title
+                save_schema_data(schema_data, st.session_state.schema_elements)
+                st.success("Schéma ajouté avec succès !")
+                # Réinitialiser les éléments après la soumission
+                st.session_state.schema_elements = []
+            else:
+                st.error("Erreur lors de l'upload du schéma.")
+        else:
+            st.error("Veuillez remplir tous les champs et uploader une image.")
+          
+          
+          
+          
+def display_schemas_page():
+    st.title("Schémas")
+    
+    # Champ de recherche
+    search_query = st.text_input("Rechercher un schéma")
+    
+    domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
+    domain = st.selectbox("Domaine", domains)
+    
+    subdomains = {
+        "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
+        "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
+        "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
+        "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
+        "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
+        "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
+        "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
+    }
+    subdomain = st.selectbox("Sous-domaine", subdomains[domain])
+    
+    subsystem = None
+    if domain == "Anatomie":
+        subsystems = {
+            "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
+            "Système circulatoire": ["Cœur", "Artères", "Veines"],
+            "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
+            "Système urinaire": ["Reins", "Vessie", "Urètres"],
+            "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
+        }
+        subsystem = st.selectbox("Sous-système", subsystems[subdomain])
+    
+    schemas = load_schemas()
+    
+    filtered_schemas = [s for s in schemas if s["domain"] == domain and s["subdomain"] == subdomain and (not subsystem or s["subsystem"] == subsystem)]
+    
+    if search_query:
+        filtered_schemas = search_schemas(filtered_schemas, search_query)
+    
+    if not filtered_schemas:
+        st.info("Aucun schéma disponible pour cette sélection.")
+    else:
+        # Pagination
+        items_per_page = 5
+        num_pages = (len(filtered_schemas) - 1) // items_per_page + 1
+        page = st.number_input("Page", min_value=1, max_value=num_pages, value=1)
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        for schema in filtered_schemas[start_idx:end_idx]:
+            with st.container():
+                st.subheader(schema.get("title", "Sans titre"))
+                if "url" in schema:
+                    st.image(schema["url"])
+                else:
+                    st.error(f"URL manquante pour le schéma : {schema.get('id', 'ID inconnu')}")
+                
+                user_answers = []
+                for i, element in enumerate(schema.get("elements", [])):
+                    user_answer = st.text_input(f"Élément {i+1} :", key=f"{schema.get('id', '')}_{i}")
+                    user_answers.append(user_answer)
+                
+                if st.button("Corriger", key=f"correct_{schema.get('id', '')}"):
+                    for i, (user_answer, correct_answer) in enumerate(zip(user_answers, schema.get("elements", []))):
+                        if user_answer.lower() == correct_answer.lower():
+                            st.success(f"Élément {i+1}. Correct : {correct_answer}")
+                        else:
+                            st.error(f"Élément {i+1}. Incorrect. La bonne réponse est : {correct_answer}")
+                
+                st.markdown("---")
+        
+        st.write(f"Page {page} sur {num_pages}")
+        
+        
+          
+            
+def display_support_page():
+    st.title("Nous soutenir")
+    st.write("Vous pouvez nous soutenir en visualisant cette publicité :")
+    
+    adsense_client_id = get_adsense_client_id()
+    
+    adsense_code = f"""
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={adsense_client_id}"
+        crossorigin="anonymous"></script>
+    <!-- Support Ad -->
+    <ins class="adsbygoogle"
+        style="display:block"
+        data-ad-client="{adsense_client_id}"
+        data-ad-slot="VOTRE_AD_SLOT_ID"
+        data-ad-format="auto"
+        data-full-width-responsive="true"></ins>
+    <script>
+        (adsbygoogle = window.adsbygoogle || []).push({{}});
+    </script>
+    """
+    
+    st.components.v1.html(adsense_code, height=300)
+    
+    
 # Constantes
 COOLDOWN_TIME = 15
 
@@ -595,7 +937,10 @@ def main():
     if 'username' not in st.session_state:  
      st.session_state.username = None
      
+
+    
     choice = None
+
 
     if st.session_state.username is None:
       st.title("Apprentissage collaboratif")
@@ -622,21 +967,11 @@ def main():
                 st.error("Ce nom d'utilisateur existe déjà")
 
     else:
-       menu = ["**:blue[Accueil]**", "**:blue[Quiz]**", "**:blue[Créer une question]**", "**:blue[Chat]**", "**:blue[Mon compte]**", "**:blue[découvrir]**", "**:red[Déconnexion]**"]
-       menu_subtitles = [
-        "Page d'accueil et leaderboard",
-        "Commencer à apprendre",
-        "Ajouter une nouvelle question",
-        "Discuter avec d'autres utilisateurs",
-        "Accédez vos informations personnelles",
-        "Découvrir les autres utilisateurs",
-        "Se déconnecter de l'application"
-    ]
-    
-       choice = custom_radio("Menu", menu, menu_subtitles)
+        choice = create_sidebar()
 
 
-    if choice == "**:blue[Accueil]**":
+    if choice == "Accueil":
+        display_help_button("Accueil")
         st.success(f"Bienvenue, **{st.session_state.username}**!")
         st.write(f"Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des quiz communautaires, et s'entraider dans le domaine de la santé !")
         st.write("*Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
@@ -647,12 +982,27 @@ def main():
     
         display_leaderboard()
         
-    elif choice == "**:red[Déconnexion]**":
+        
+    elif choice == "Nous soutenir":
+     display_help_button("Nous soutenir", "content")
+     display_support_page()
+
+     
+     
+    elif choice == "Schémas":
+     display_help_button("Schémas", "content")
+     display_schemas_page()
+    elif choice == "Ajouter un schéma":
+     display_help_button("Ajouter un schéma")
+     display_add_schema_page()
+    
+    elif choice == "Déconnexion":
         st.session_state.username = None
         st.success("Vous avez été déconnecté.")
         st.rerun() 
      
-    elif choice == "**:blue[Quiz]**":
+    elif choice == "Quiz":
+        display_help_button("Quiz")
         st.subheader("Quiz")
         domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
         selected_domain = st.selectbox("Qu'est-ce que vous souhaitez réviser ?", domains)
@@ -724,7 +1074,8 @@ def main():
                 st.success(f"Quiz terminé! Votre score: {score}/{total_questions}")
                 update_user_stats(st.session_state.username, points=score, quizzes_completed=1)
 
-    elif choice == "**:blue[Créer une question]**":
+    elif choice == "Créer une question":
+      display_help_button("Créer une question")
       if 'username' not in st.session_state or st.session_state.username is None:
         st.warning("Vous devez être connecté pour pouvoir créer une question.")
     
@@ -804,11 +1155,13 @@ def main():
         else:
              st.error("La question ne peut pas être vide (Le champ **:blue[Question]** tout au dessus, ensuite remplissez vos champs d'entrée et configurez votre question).")
 
-    if choice == "**:blue[Chat]**":
+    if choice == "Chat":
+  
+        display_help_button("Chat")
         display_chat()
   
-  
-    elif choice == "**:blue[Mon compte]**":
+    elif choice == "Mon compte":
+     display_help_button("Mon compte")
      if st.session_state.username:
             with st.container(border=True):
              display_account_details(st.session_state.username)
@@ -825,14 +1178,14 @@ def main():
 
     
     
-    if choice == "**:blue[découvrir]**":
+    if choice == "découvrir":
+
+      display_help_button("découvrir")
       discover_page()
 
 
 
-
-
-
 if __name__ == "__main__":
+    setup_cloudinary()
     main()
    
