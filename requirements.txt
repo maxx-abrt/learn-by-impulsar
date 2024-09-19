@@ -3,3 +3,8 @@ pandas
 requests
 python-dotenv
 cloudinary
+pymongo
+plotly
+plotly.express
+"pymongo[srv]"
+timedelta
