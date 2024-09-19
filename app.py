@@ -1820,6 +1820,5 @@ def main():
 
     pass
 if __name__ == "__main__":
-    update_all_user_badges()
     setup_cloudinary()
     main()
