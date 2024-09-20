@@ -1340,6 +1340,9 @@ def main():
         st.session_state.username = None
 
     if st.session_state.username is None:
+        st.write("Bienvenue sur cette plateforme d'apprentissage collaboratif !")
+        st.write(":blue-background[Veuillez remplir le formulaire ci-dessous pour vous **connecter** ou alors vous **inscrire** !]")
+    
         st.subheader(":blue[Connexion]")
         username = st.text_input("Nom d'utilisateur", key="login_username")
         password = st.text_input("Mot de passe", type="password", key="login_password")
