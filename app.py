@@ -19,6 +19,7 @@ import plotly.express as px
 import random
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+import streamlit.components.v1 as components
 
 load_dotenv()
 
@@ -36,15 +37,21 @@ st.set_page_config(
     layout = "centered", 
     initial_sidebar_state="collapsed" )
 
-try:
-    client = MongoClient(mongo_uri)
-    db = client['quiz_app']
-    quiz_interactions_collection = db['quiz_interactions']
-    users_collection = db['users']
-    print("Connexion réussie !")
-    
-except Exception as e:
-    st.error(f"")
+def get_db_connection():
+    if 'db' not in st.session_state:
+        try:
+            client = MongoClient(mongo_uri)
+            st.session_state.db = client['quiz_app']
+            print('Base de données connectée')
+        except Exception as e:
+            st.error(f"Erreur de connexion : {str(e)}")
+    return st.session_state.db
+
+db = get_db_connection()
+quiz_interactions_collection = db['quiz_interactions']
+users_collection = db['users']
+interactions_collection = db['user_interactions']
+questions_collection = db['questions']
     
 # Assurez-vous que 'db' est défini avant d'utiliser des collections
 collection_name = 'users'
@@ -53,11 +60,7 @@ try:
 except NameError:
     st.error("La base de données n'est pas définie correctement.")
 # Create a new collection for storing user interactions
-interactions_collection = db['user_interactions']
-users_collection = db['users']
-quiz_interactions_collection = db['quiz_interactions']
-interactions_collection = db['user_interactions']
-questions_collection = db['questions']
+
 def update_likes_dislikes(question_id, action, username):
                     existing_interaction = interactions_collection.find_one({
                         'username': username,
@@ -79,6 +82,13 @@ def update_likes_dislikes(question_id, action, username):
         
         
         
+        
+        
+        
+def get_db_connection():
+    if 'db_connection' not in st.session_state:
+        st.session_state.db_connection = MongoClient(mongo_uri)
+    return st.session_state.db_connection
         
 
 ##Stats et infos :
@@ -211,14 +221,10 @@ def display_advice():
         st.subheader("Conseils personnalisés suivant vos données")
         
         if quizzes_completed < 5:
-            st.info("Essayez d'augmenter le nombre de quiz par jour pour améliorer vos résultats !")
+            st.info("Essayez d'augmenter le nombre de quiz par jour pour améliorer vos résultats ! (nous vous conseillons 5 quiz par jour !)")
         else:
             st.success("Félicitations ! Vous suivez un bon rythme de révision.")
-        
-        if weak_domains:
-            st.write("*Je peux observer cependant ceci :*")
-            st.write(f"Vous semblez avoir des difficultés dans les domaines suivants : **:blue[{', '.join(weak_domains)}]**. *Considérez passer plus de temps à les réviser.*")
-                
+ 
         # Calculate average quizzes per week
         days_since_registration = (datetime.now() - user_data['registration_date']).days
         weeks_since_registration = max(days_since_registration / 7, 1)  # Ensure at least one week
@@ -319,10 +325,10 @@ def display_moderation_page():
                     st.write(f"**Motif du signalement:** **:blue[{report['reason']}]**")
                     st.write(f"**Date du signalement:** **:blue[{report['timestamp'].strftime('%d %b %Y %H:%M')}]**")
 
-            # Button to delete the question
-            if st.button(":red[Supprimer la question]", key=f"delete_{question['_id']}"):
-                questions_collection.delete_one({'_id': question['_id']})
-                st.success("Question supprimée.")
+                # Button to delete the question
+                if st.button(":red[Supprimer la question]", key=f"delete_{question['_id']}"):
+                    questions_collection.delete_one({'_id': question['_id']})
+                    st.success("Question supprimée.")
 
 
 
@@ -347,7 +353,7 @@ def update_all_user_badges():
 
 badge_thresholds = {
     "completion_badge": {
-        "name": "Complétion 🏆",
+        "name": "Points de quiz 🏆",
         "levels": [30, 500, 1000, 5000, 10000]
     },
     "community_badge": {
@@ -887,26 +893,27 @@ def display_schemas_page():
 
 def display_support_page():
     st.title("Nous soutenir")
-    st.write("Vous pouvez nous soutenir en visualisant cette publicité :")
-    
-    adsense_client_id = get_adsense_client_id()
-    
-    adsense_code = f"""
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={adsense_client_id}"
-        crossorigin="anonymous"></script>
-    <!-- Support Ad -->
-    <ins class="adsbygoogle"
-        style="display:block"
-        data-ad-client="{adsense_client_id}"
-        data-ad-slot="VOTRE_AD_SLOT_ID"
-        data-ad-format="auto"
-        data-full-width-responsive="true"></ins>
-    <script>
-        (adsbygoogle = window.adsbygoogle || []).push({{}});
+    #st.write("Vous pouvez nous soutenir en visualisant cette publicité :")
+    st.subheader("Vous appréciez la plateforme et la gratuité proposée ? Vous pouvez me soutenir avec un petit don, avec le bouton ci-dessous.")
+    # Intégration du script Buy Me a Coffee
+    bmc_script = """
+    <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" 
+            data-name="bmc-button" 
+            data-slug="maxx.abrt" 
+            data-color="#5F7FFF" 
+            data-emoji="☕️" 
+            data-font="Lato" 
+            data-text="Cliquez ici pour faire un don" 
+            data-outline-color="#000000" 
+            data-font-color="#ffffff" 
+            data-coffee-color="#FFDD00">
     </script>
     """
-    
-    st.components.v1.html(adsense_code, height=300)
+
+    # Utilisation de components.html pour afficher le bouton
+    components.html(bmc_script, height=90)
+
+
     
 # Constantes
 COOLDOWN_TIME = 15
@@ -1148,13 +1155,13 @@ def display_account_details(username):
     collection = db['users']
     user = collection.find_one({"username": username})
     # Affichez les détails de l'utilisateur
-    st.write(f"Nom d'utilisateur: {user['username']}")
-    st.write(f"Domaine: {user['domain']}")
-    st.write(f"Niveau d'étude: {user['study_level']}")
-    st.write(f"Points: {user['points']}")
-    st.write(f"Points communautaires: {user['community_points']}")
-    st.write(f"QCM complétés: {user['quizzes_completed']}")
-    st.write(f"Date d'inscription: {user['registration_date']}")
+    st.write(f"**Nom d'utilisateur: :blue[{user['username']}]**")
+    st.write(f"**Domaine: :blue[{user['domain']}]**")
+    st.write(f"**Niveau d'étude: :blue[{user['study_level']}]**")
+    st.write(f"**Points: :blue[{user['points']}]**")
+    st.write(f"**Points communautaires: :blue[{user['community_points']}]**")
+    st.write(f"**QCM complétés: :blue[{user['quizzes_completed']}]**")
+    st.write(f"**Date d'inscription: :blue[{user['registration_date']}]**")
         
 def update_community_points(username):
     collection = db['users']
@@ -1507,17 +1514,6 @@ def main():
                         if username is None:
                             st.warning("Veuillez vous connecter pour accéder au quiz.")
                             return
-                        
-                        
-                        
-                        
-                            user_info = list(users_collection.find(
-                                {"username": 1, "points": 1, "quizzes_completed": 1, "community_points": 1, "registration_date": 1, "badges": 1}
-                            ))
-                            
-                            if not user_info:
-                                st.warning("Utilisateur non trouvé.")
-                                return
                             
                         else:
                             all_users = list(users_collection.find({}, {"username": 1, "points": 1, "quizzes_completed": 1, "community_points": 1, "registration_date": 1, "badges": 1}))
@@ -1594,10 +1590,40 @@ def main():
                             st.write(f"*:red[Dislikes: {question.get('dislikes', 0) + 1}]*")
 
                     st.write("---")  # Séparateur entre les questions
-            
-            if st.button("Terminer le QCM"):
+                        
+            # Initialiser le temps de dernier clic s'il n'existe pas
+            if 'last_click_time' not in st.session_state:
+                st.session_state.last_click_time = datetime.min
+
+            # Fonction pour calculer le temps restant du cooldown
+            def get_cooldown_time():
+                elapsed_time = datetime.now() - st.session_state.last_click_time
+                remaining_time = max(timedelta(seconds=15) - elapsed_time, timedelta(seconds=0))
+                return remaining_time.total_seconds()
+
+            # Vérifier si le cooldown est actif
+            cooldown_seconds = get_cooldown_time()
+            cooldown_active = cooldown_seconds > 0
+
+            # Afficher un compte à rebours si le cooldown est actif
+            ph = st.empty()
+            if cooldown_active:
+                for secs in range(int(cooldown_seconds), 0, -1):
+                    mm, ss = secs // 60, secs % 60
+                    ph.metric("Temps restant avant la prochaine soumission", f"{mm:02d}:{ss:02d}")
+                    time.sleep(1)
+                    if secs == 1:
+                        ph.empty()  # Effacer le compteur après la fin du cooldown
+                        st.rerun()  # Recharger la page pour réactiver le bouton
+
+            # Désactiver le bouton si le cooldown est actif
+            button_clicked = st.button("Terminer le QCM", disabled=cooldown_active)
+
+            if button_clicked and not cooldown_active:
+                # Mettre à jour le temps de dernier clic
                 st.session_state.last_click_time = datetime.now()
 
+                # Logique de soumission du formulaire
                 score = 0
                 domain_counts = {}
                 subdomain_counts = {}
@@ -1609,7 +1635,7 @@ def main():
                         st.success(f"Question {i+1}: Correct!")
                     else:
                         st.error(f"Question {i+1}: Incorrect. La bonne réponse était: {question['correct_answer']}")
-                    
+
                     domain = question.get("domain", "Unknown")
                     subdomain = question.get("subdomain", "Unknown")
                     subsystem = question.get("subsystem", "Unknown")
@@ -1618,9 +1644,6 @@ def main():
                     subdomain_counts[subdomain] = subdomain_counts.get(subdomain, 0) + 1
                     if subsystem:
                         subsystem_counts[subsystem] = subsystem_counts.get(subsystem, 0) + 1
-                def update_user_stats(username, points=0, quizzes_completed=0):
-                    collection = db['users']
-                    collection.update_one({"username": username}, {"$inc": {"points": points, "quizzes_completed": quizzes_completed}})
 
                 update_user_stats(st.session_state.username, points=score, quizzes_completed=1)
                 st.info(f"Votre score pour cette page: {score}/{len(current_questions)}")
@@ -1631,7 +1654,6 @@ def main():
                     "subdomains": subdomain_counts,
                     "subsystems": subsystem_counts
                 })
-
 
 
 
@@ -1708,7 +1730,7 @@ def main():
             st.write("**Évolution des points cumulés de la semaine :**")
             st.area_chart(points_over_time.set_index('date')['points'])
         display_advice()
-        display_badge_progress(user_data)
+        
         
         
     if choice == "Créer une question":
@@ -1795,10 +1817,19 @@ def main():
         display_chat()
   
     elif choice == "Mon compte":
+        # Vérifiez si l'utilisateur est connecté
+     user_id = st.session_state.get('username')
+     if not user_id:
+        st.warning("Veuillez vous connecter pour voir vos statistiques.")
+        return
+     user_data = users_collection.find_one({"username": user_id})
      display_help_button("Mon compte")
+     
      if st.session_state.username:
             with st.container(border=True):
              display_account_details(st.session_state.username)
+             
+
      new_username = st.text_input("Nouveau nom d'utilisateur", key="new_username")
      if st.button("Changer le nom d'utilisateur"):
      
@@ -1808,6 +1839,9 @@ def main():
             st.session_state.username = new_username  # Mettre à jour la session
       else:
             st.error("Ce nom d'utilisateur existe déjà, veuillez en choisir un autre.")
+          
+     with st.container(border=True):
+      display_badge_progress(user_data)
  
     if choice == "découvrir":
 
@@ -1821,4 +1855,5 @@ def main():
     pass
 if __name__ == "__main__":
     setup_cloudinary()
+    update_all_user_badges()
     main()
