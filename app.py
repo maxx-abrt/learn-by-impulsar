@@ -133,6 +133,7 @@ def display_user_cards():
             
             
 def report_question(question_id, username, reason):
+    # Retrieve user data
     user_data = users_collection.find_one({"username": username}, {"user_id": 1})
     if user_data:
         report_data = {
@@ -141,6 +142,7 @@ def report_question(question_id, username, reason):
             'reason': reason,
             'timestamp': datetime.now()
         }
+        # Update the question document by pushing to 'reports'
         result = questions_collection.update_one(
             {'_id': question_id},
             {'$push': {'reports': report_data}}
@@ -153,43 +155,39 @@ def report_question(question_id, username, reason):
                 
 def display_report_interface(question_id):
     with st.expander("Signaler la question"):
-        reason = st.text_input("Raison du signalement (50 caractères max)", max_chars=50)
-        if st.button("Envoyer le signalement"):
+        reason_key = f"report_reason_{question_id}_{uuid.uuid4()}"
+        button_key = f"send_report_{question_id}_{uuid.uuid4()}"
+
+        reason = st.text_input(
+            "Raison du signalement (50 caractères max)", 
+            max_chars=50, 
+            key=reason_key
+        )
+        if st.button("Envoyer le signalement", key=button_key):
             username = st.session_state.get('username')
             if not username:
                 st.warning("Veuillez vous connecter pour signaler une question.")
                 return
 
-            # Retrieve user data
-            user_data = users_collection.find_one({"username": username}, {"user_id": 1})
-            if not user_data:
-                st.error("Erreur lors de la récupération des informations utilisateur.")
-                return
-
             # Check if the user has already reported this question
-            question = questions_collection.find_one({"_id": question_id, "reports.user_id": user_data['user_id']})
-            if question:
+            existing_report = questions_collection.find_one(
+                {"_id": question_id, "reports.user_id": users_collection.find_one({"username": username})['user_id']}
+            )
+            if existing_report:
                 st.warning("Vous avez déjà signalé cette question.")
                 return
 
-            # Proceed to report the question
+            # Proceed to report the question if reason is provided
             if reason:
-                report_data = {
-                    'username': username,
-                    'user_id': user_data['user_id'],
-                    'reason': reason,
-                    'timestamp': datetime.now()
-                }
-                result = questions_collection.update_one(
-                    {'_id': question_id},
-                    {'$push': {'reports': report_data}}
-                )
-                if result.modified_count > 0:
+                success = report_question(question_id, username, reason)
+                if success:
                     st.success("Signalement envoyé.")
                 else:
                     st.error("Erreur lors de l'envoi du signalement.")
             else:
                 st.warning("Veuillez fournir une raison pour le signalement.")
+                
+
 
 
 def display_advice():
@@ -1224,10 +1222,16 @@ def update_user_stats(username, points=0, quizzes_completed=0):
     collection = db['users']
     collection.update_one({"username": username}, {"$inc": {"points": points, "quizzes_completed": quizzes_completed}})
 
+
+
 def load_questions(domain, subdomain, subsystem, source):
     collection = db['questions']
-    questions = list(collection.find({"domain": domain, "subdomain": subdomain, "subsystem": subsystem}))
+    # Fetch questions sorted by creation date to ensure chronological order
+    questions = list(collection.find(
+        {"domain": domain, "subdomain": subdomain, "subsystem": subsystem}
+    ).sort("creation_date", 1))  # Sort by creation_date in ascending order
     return questions
+    
 
 def add_question_to_json(question, source):
     collection = db['questions']
@@ -1442,48 +1446,30 @@ def main():
             4: "🟠",  # Orange
             5: "🔴"   # Rouge
         }
-        items_per_page = 10
-        total_questions = len(questions)
-        num_pages = (total_questions - 1) // items_per_page + 1
+        filtered_questions = []   
 
-        if num_pages > 0:
-            page_number = st.number_input("Page", min_value=1, max_value=num_pages, value=1)
-            start_idx = (page_number - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            current_questions = questions[start_idx:end_idx]
-        else:
-
-            current_questions = []
-
-
-        question_type = st.radio("Source des questions :",[":blue[Questions de la communauté]"],captions=["Questions faites par les membres de la communauté, potentiellemment troll ou inexactes"],)
+        # Assuming this block is within a function or the main logic
+        question_type = st.radio("Source des questions :", [":blue[Questions de la communauté]"], captions=["Questions faites par les membres de la communauté, potentiellement troll ou inexactes"])
 
         if question_type == ":blue[Questions de la communauté]":
             questions = load_questions(selected_domain, selected_subdomain, selected_subsystem, "community")
-
-        if not questions:
-            st.warning("")
-            
-            
-        else:
-            
-            with st.popover("Rechercher une question / filtrer"):
-                # Fonctionnalité de recherche
-                search_query = st.text_input("Entrez votre recherche ici :")
-                
-                # Slider pour sélectionner la difficulté
-                difficulty_filter = st.slider("Filtrer par difficulté", 1, 5, value=1)
-                
-                # Bouton pour valider la sélection
-                if st.button("Valider"):
-                    # Appliquer le filtre de difficulté
-                    filtered_questions = [
-                        q for q in questions 
-                        if search_query.lower() in q["question"].lower() and q.get("difficulty", 1) == difficulty_filter
-                    ]
-                else:
-                    # Si aucun filtre n'est appliqué, afficher toutes les questions correspondant à la recherche
-                    filtered_questions = [q for q in questions if search_query.lower() in q["question"].lower()]
+            if not questions:
+                st.warning("Aucune question disponible pour cette sélection.")
+            else:
+                with st.popover("Rechercher une question / filtrer"):
+                    # Fonctionnalité de recherche
+                    search_query = st.text_input("Entrez votre recherche ici :")
+                    # Slider pour sélectionner la difficulté
+                    difficulty_filter = st.slider("Filtrer par difficulté", 1, 5, value=1)
+                    # Bouton pour valider la sélection
+                    if st.button("Valider"):
+                        # Appliquer le filtre de difficulté
+                        filtered_questions = [
+                            q for q in questions if search_query.lower() in q["question"].lower() and q.get("difficulty", 1) == difficulty_filter
+                        ]
+                    else:
+                        # Si aucun filtre n'est appliqué, afficher toutes les questions correspondant à la recherche
+                        filtered_questions = [q for q in questions if search_query.lower() in q["question"].lower()]
             # Pagination setup
             items_per_page = 10
             total_questions = len(filtered_questions)
@@ -1504,11 +1490,10 @@ def main():
                     # Afficher discrètement le créateur et la date
             st.write("---") 
             if current_questions:
-                for i, question in enumerate(questions):
-                    difficulty = question.get('difficulty', 1)  # Par défaut à 1 si non défini
+                for i, question in enumerate(current_questions):
+                    difficulty = question.get('difficulty', 1)
                     emoji = difficulty_emojis.get(difficulty, "🟢")
-                    st.subheader(f"{emoji} Question {i+1}")
-
+                    st.subheader(f"{emoji} Question {start_idx + i + 1}")
                     
                     # Use a container for each question to improve layout control
                     with st.container():
@@ -1535,10 +1520,8 @@ def main():
                         
                         
                         
-                        # Assuming you have a list of questions
-                        for question in questions:
-                            display_report_interface(question['_id'])
-                        # Display creator info in a popover
+                        display_report_interface(question['_id'])
+                         # Display creator info in a popover
                         with st.expander(f"Voir le profil de **:blue[{question.get('created_by', 'Inconnu')}]**"):
                             creator_id = question.get('creator_id', 'Inconnu')
                             created_by = question.get('created_by', 'Inconnu')
