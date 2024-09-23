@@ -1,11 +1,9 @@
 import streamlit as st
 import sqlite3
-import json
 import hashlib
 import time
 import pandas as pd
 from datetime import datetime, timedelta
-from community_questions import load_community_questions, add_community_question
 import requests
 from dotenv import load_dotenv
 import os
@@ -15,11 +13,10 @@ import cloudinary.uploader
 import uuid
 from PIL import Image
 from pymongo import MongoClient
-import plotly.express as px
 import random
 from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 import streamlit.components.v1 as components
+import unicodedata
 
 load_dotenv()
 
@@ -131,8 +128,56 @@ def display_user_cards():
             
             
             
+           
+def update_questions_with_unique_ids():
+    questions = list(questions_collection.find())
+    for question in questions:
+        if 'unique_id' not in question or not question['unique_id']:
+            creator_name = question.get('created_by', 'Unknown')
+            creator_id = question.get('creator_id', None)
             
-def report_question(question_id, username, reason):
+            if creator_id:
+                # Générer l'identifiant unique
+                unique_id = generate_unique_question_id(creator_name, creator_id)
+                
+                # Mettre à jour la question avec l'identifiant unique
+                questions_collection.update_one(
+                    {'_id': question['_id']},
+                    {'$set': {'unique_id': unique_id}}
+                )
+                print(f"Updated question ID: {question['_id']} with unique ID: {unique_id}")
+            else:
+                print(f"Skipping question ID: {question['_id']} due to missing creator ID.")
+
+
+           
+           
+def generate_unique_question_id(creator_name, creator_id):
+    # Normaliser le nom du créateur
+    normalized_name = ''.join(
+        c for c in unicodedata.normalize('NFD', creator_name) if unicodedata.category(c) != 'Mn'
+    ).upper()[:3]
+
+    # Compter le nombre de questions existantes par l'utilisateur
+    question_count = questions_collection.count_documents({'creator_id': creator_id}) + 1
+
+    # Générer l'identifiant unique
+    random_digits = random.randint(10, 99)
+    random_letters = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=4))
+    unique_id = f"{normalized_name}{question_count:03d}{random_digits}{random_letters}"
+
+    return unique_id
+           
+           
+           
+           
+           
+           
+           
+           
+           
+            
+def report_question(unique_id, username, reason):
     # Retrieve user data
     user_data = users_collection.find_one({"username": username}, {"user_id": 1})
     if user_data:
@@ -144,24 +189,20 @@ def report_question(question_id, username, reason):
         }
         # Update the question document by pushing to 'reports'
         result = questions_collection.update_one(
-            {'_id': question_id},
+            {'unique_id': unique_id},
             {'$push': {'reports': report_data}}
         )
         return result.modified_count > 0
     return False
 
 
-
                 
-def display_report_interface(question_id):
+def display_report_interface(unique_id):
     with st.expander("Signaler la question"):
-        reason_key = f"report_reason_{question_id}_{uuid.uuid4()}"
-        button_key = f"send_report_{question_id}_{uuid.uuid4()}"
-
+        reason_key = f"report_reason_{unique_id}_{uuid.uuid4()}"
+        button_key = f"send_report_{unique_id}_{uuid.uuid4()}"
         reason = st.text_input(
-            "Raison du signalement (50 caractères max)", 
-            max_chars=50, 
-            key=reason_key
+            "Raison du signalement (50 caractères max)", max_chars=50, key=reason_key
         )
         if st.button("Envoyer le signalement", key=button_key):
             username = st.session_state.get('username')
@@ -171,7 +212,7 @@ def display_report_interface(question_id):
 
             # Check if the user has already reported this question
             existing_report = questions_collection.find_one(
-                {"_id": question_id, "reports.user_id": users_collection.find_one({"username": username})['user_id']}
+                {"unique_id": unique_id, "reports.user_id": users_collection.find_one({"username": username})['user_id']}
             )
             if existing_report:
                 st.warning("Vous avez déjà signalé cette question.")
@@ -179,7 +220,7 @@ def display_report_interface(question_id):
 
             # Proceed to report the question if reason is provided
             if reason:
-                success = report_question(question_id, username, reason)
+                success = report_question(unique_id, username, reason)
                 if success:
                     st.success("Signalement envoyé.")
                 else:
@@ -443,37 +484,7 @@ def display_badge_progress(user_data):
 
 
 
-def display_questions(questions):
-    for i, question in enumerate(questions):
-        st.subheader(f"Question {i+1}")
-        st.write(question["question"])
-        
-        creator_info = f"Créée par: {question.get('created_by', 'Inconnu')} le {question.get('creation_date').strftime('%d %b') if question.get('creation_date') else 'Date inconnue'}"
-        st.caption(creator_info)
-        
-        # Bouton pour voir le profil
-        if st.button(f"Voir le profil de {question.get('created_by', 'Inconnu')}", key=f"profile_{i}"):
-            creator_id = question.get('creator_id', 'Inconnu')
-            st.info(f"ID Utilisateur: {creator_id}")
-        
-                # Afficher les likes et dislikes
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("👍", key=f"like_{i}"):
-                update_likes_dislikes(question['_id'], 'like')
-            st.write(f"Likes: {question.get('likes', 0)}")
-        with col2:
-            if st.button("👎", key=f"dislike_{i}"):
-                update_likes_dislikes(question['_id'], 'dislike')
-            st.write(f"Dislikes: {question.get('dislikes', 0)}")
 
-
-        if question["type"] == "QCM":
-            user_answer = st.radio(f"Choisissez la bonne réponse pour la question {i+1}:", question["options"])
-        elif question["type"] == "Vrai/Faux":
-            user_answer = st.radio(f"Choisissez la bonne réponse pour la question {i+1}:", ["Vrai", "Faux"])
-        else:
-            user_answer = st.text_input(f"Votre réponse pour la question {i+1}:")
 # Création des collections
 collections = ['users', 'chat_messages', 'questions', 'community_questions', 'scores', 'user_answers', 'user_sessions']
 collection_name = 'users'
@@ -719,8 +730,13 @@ def upload_schema(file_content, file_name, domain, subdomain, subsystem=None):
 def add_community_question(question):
     collection = db['questions']
     user = db['users'].find_one({"username": st.session_state.username})
+    
     question['created_by'] = user['username']
-    question['creator_id'] = user['user_id']  # Ajout de l'UUID
+    question['creator_id'] = user['user_id']
+    
+    # Ajout de l'identifiant unique
+    question['unique_id'] = generate_unique_question_id(user['username'], user['user_id'])
+    
     question['creation_date'] = datetime.now()
     collection.insert_one(question)
     
@@ -1251,6 +1267,7 @@ def load_questions(domain, subdomain, subsystem, source):
     return questions
     
 
+
 def add_question_to_json(question, source):
     collection = db['questions']
     user = db['users'].find_one({"username": st.session_state.username})
@@ -1260,6 +1277,7 @@ def add_question_to_json(question, source):
     question['likes'] = 0  # Initialiser les likes
     question['dislikes'] = 0  # Initialiser les dislikes
     question['reports'] = []
+    question['unique_id'] = generate_unique_question_id(user['username'], user['user_id'])
     collection.insert_one(question)
 
 # Fonction d'envoi d'email
@@ -1510,8 +1528,7 @@ def main():
                 for i, question in enumerate(current_questions):
                     difficulty = question.get('difficulty', 1)
                     emoji = difficulty_emojis.get(difficulty, "🟢")
-                    st.subheader(f"{emoji} Question {start_idx + i + 1}")
-                    
+                    st.subheader(f"{emoji} - Question {i+1} (ID: {question.get('unique_id')})")
                     # Use a container for each question to improve layout control
                     with st.container():
                         username = st.session_state.get('username', None)
@@ -1537,7 +1554,7 @@ def main():
                         
                         
                         
-                        display_report_interface(question['_id'])
+                        display_report_interface(question['unique_id'])
                          # Display creator info in a popover
                         with st.expander(f"Voir le profil de **:blue[{question.get('created_by', 'Inconnu')}]**"):
                             creator_id = question.get('creator_id', 'Inconnu')
@@ -1858,5 +1875,4 @@ def main():
     pass
 if __name__ == "__main__":
     setup_cloudinary()
-    update_all_user_badges()
     main()
