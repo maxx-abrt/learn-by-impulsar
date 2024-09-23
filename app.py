@@ -891,25 +891,43 @@ def display_schemas_page():
 
 def display_support_page():
     st.title("Nous soutenir")
-    #st.write("Vous pouvez nous soutenir en visualisant cette publicité :")
-    st.subheader("Vous appréciez la plateforme et la gratuité proposée ? Vous pouvez me soutenir avec un petit don, avec le bouton ci-dessous.")
-    # Intégration du script Buy Me a Coffee
-    bmc_script = """
-    <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" 
-            data-name="bmc-button" 
-            data-slug="maxx.abrt" 
-            data-color="#5F7FFF" 
-            data-emoji="☕️" 
-            data-font="Lato" 
-            data-text="Cliquez ici pour faire un don" 
-            data-outline-color="#000000" 
-            data-font-color="#ffffff" 
-            data-coffee-color="#FFDD00">
+    st.subheader("Vous appréciez la plateforme et la gratuité proposée ? Vous pouvez me soutenir en regardant une publicité.")
+
+    # Générer un ID utilisateur unique avec UUID4
+    user_id = str(uuid.uuid4())
+
+    # Code HTML et JavaScript pour l'intégration d'AppLixir
+    applixir_html = f"""
+    <div id="applixir_vanishing_div" hidden>
+        <iframe id="applixir_parent"></iframe>
+    </div>
+    <script type="text/javascript" src="https://cdn.applixir.com/applixir.sdk4.0m.js"></script>
+    <script type='application/javascript'>
+        function adStatusCallback(status) {{
+            console.log('Ad Status: ' + status);
+            // Vous pouvez ajouter ici des actions spécifiques en fonction du statut de l'annonce
+            if (status === 'ad-rewarded') {{
+                alert('Merci d\'avoir regardé la publicité !');
+            }}
+        }}
+
+        var options = {{
+            zoneId: 2050,  // Utiliser 2050 pour les tests
+            userId: '{user_id}',  // Recommandé d'utiliser UUID4
+            accountId: '8394',  // Remplacez par votre ID de compte
+            siteId: '8923',  // Remplacez par votre ID de site
+            adStatusCb: adStatusCallback
+        }};
+
+        document.getElementById('showRewardAdButton').onclick = function() {{
+            invokeApplixirVideoUnit(options);  // Lire la vidéo publicitaire
+        }};
     </script>
+    <button type="button" id="showRewardAdButton">Regarder la pub</button>
     """
 
-    # Utilisation de components.html pour afficher le bouton
-    components.html(bmc_script, height=90)
+    # Utiliser components.html pour rendre le HTML et JavaScript dans Streamlit
+    components.html(applixir_html, height=300)
 
 
     
@@ -1354,7 +1372,6 @@ def main():
         if st.button("**:blue[Se connecter]**"):
             if verify_user(username, password):
                 st.session_state.username = username
-                st.success("Connexion réussie!")
                 st.rerun()
             else:
                 st.error("Nom d'utilisateur ou mot de passe incorrect")
