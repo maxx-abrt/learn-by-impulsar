@@ -1,9 +1,8 @@
 import streamlit as st
-import sqlite3
 import hashlib
 import time
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import requests
 from dotenv import load_dotenv
 import os
@@ -17,6 +16,7 @@ import random
 from pymongo.mongo_client import MongoClient
 import streamlit.components.v1 as components
 import unicodedata
+from bson.objectid import ObjectId
 
 load_dotenv()
 
@@ -24,24 +24,34 @@ load_dotenv()
 mongo_uri = os.getenv('MONGODB_URI')
 
 
-img = Image.open('favicon.png')
-igm = Image.open('2.png')
+@st.cache_resource(show_spinner=False)
+def load_image(image_path):
+    return Image.open(image_path)
 
-st.logo(igm)
+img = load_image('favicon.png')
+igm = load_image('2.png')
+
 st.set_page_config(
-    page_title= "Learn par Impulsar", 
-    page_icon =img, 
-    layout = "centered", 
-    initial_sidebar_state="collapsed" )
+    page_title="Learn par Impulsar",
+    page_icon=img,
+    layout="centered",
+    initial_sidebar_state="collapsed"
+    
+)
 
 def get_db_connection():
     if 'db' not in st.session_state:
-        try:
-            client = MongoClient(mongo_uri)
-            st.session_state.db = client['quiz_app']
-            print('Base de données connectée')
-        except Exception as e:
-            st.error(f"Erreur de connexion : {str(e)}")
+        attempts = 0
+        while attempts < 3:
+            try:
+                client = MongoClient(os.getenv('MONGODB_URI'))
+                st.session_state.db = client['quiz_app']
+                print('Database connected')
+                break
+            except Exception as e:
+                attempts += 1
+                st.error(f"Connection error: {str(e)}. Retrying ({attempts}/3)...")
+                time.sleep(2)
     return st.session_state.db
 
 db = get_db_connection()
@@ -49,7 +59,36 @@ quiz_interactions_collection = db['quiz_interactions']
 users_collection = db['users']
 interactions_collection = db['user_interactions']
 questions_collection = db['questions']
+def get_todolist_collection():
+    return db['todolist']
+def get_question_sets_collection():
+    return db['question_sets']
+question_sets_collection = db['question_sets']
     
+    
+    
+def create_question_set(title, difficulty, description, questions, creator_id, creator_username, banner_image_url):
+    question_set = {
+        "_id": ObjectId(),
+        "title": title,
+        "number_of_questions": len(questions),
+        "difficulty": difficulty,
+        "description": description,
+        "questions": questions,
+        "success_rate": 0.0,
+        "creator_id": creator_id,
+        "creator_username": creator_username,
+        "completed_by": [],
+        "banner_image_url": banner_image_url
+    }
+    get_question_sets_collection().insert_one(question_set)
+
+
+@st.cache_data(show_spinner=False)
+def get_user_data(username):
+    return users_collection.find_one({"username": username})
+
+
 # Assurez-vous que 'db' est défini avant d'utiliser des collections
 collection_name = 'users'
 try:
@@ -57,6 +96,45 @@ try:
 except NameError:
     st.error("La base de données n'est pas définie correctement.")
 # Create a new collection for storing user interactions
+
+
+def get_session_id():
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = hashlib.sha256(str(datetime.now()).encode()).hexdigest()
+    return st.session_state.session_id  
+    
+    
+        
+def manage_session():
+    # Assurez-vous que le session_id est initialisé
+    get_session_id()
+    
+    session_duration = 15  # Durée d'expiration de la session en minutes
+    
+    # Vérifier si la session est déjà en cours
+    if 'session_expiry' in st.session_state:
+        # Vérifier si la session a expiré
+        if datetime.now() > st.session_state.session_expiry:
+            st.warning("Votre session a expiré. Veuillez vous reconnecter.")
+            del st.session_state['session_id']
+            del st.session_state['session_expiry']
+        else:
+            # Réinitialiser le temps d'expiration à chaque interaction
+            st.session_state.session_expiry = datetime.now() + timedelta(minutes=session_duration)
+    else:
+        # Créer une nouvelle session
+        st.session_state.session_expiry = datetime.now() + timedelta(minutes=session_duration)
+    st.session_state.session_id = []
+    # Utiliser un cookie pour stocker l'état de la session côté client
+    components.html(
+        f"""<script>
+            document.cookie = "session_id={st.session_state.session_id}; path=/; max-age={session_duration * 60}";
+        </script>""",
+        height=0,
+    )
+
+manage_session()
+
 
 def update_likes_dislikes(question_id, action, username):
                     existing_interaction = interactions_collection.find_one({
@@ -78,10 +156,258 @@ def update_likes_dislikes(question_id, action, username):
                         })
         
         
+def create_question(text, options, correct_answer):
+    return {
+        "text": text,
+        "options": options,
+        "correct_answer": correct_answer
+    }
+     
+     
+     
+# Initialisation de session_state
+if 'selected_set_id' not in st.session_state:
+    st.session_state.selected_set_id = None
+if 'current_question_index' not in st.session_state:
+    st.session_state.current_question_index = 0
+if 'user_answers' not in st.session_state:
+    st.session_state.user_answers = []
+
+def display_question_sets_page():
+    st.title("Sets de Questions")
+    
+    # Récupérer les sets de questions depuis la base de données
+    question_sets = list(question_sets_collection.find())
+    
+    # Créer des colonnes pour disposer les cartes
+    cols = st.columns(2)  # Ajustez le nombre de colonnes selon vos besoins
+    
+    for idx, qset in enumerate(question_sets):
+        with cols[idx % 2]:  # Distribuer les sets dans les colonnes
+            with st.container(border=True):
+                st.subheader(qset['title'])
+                st.image(qset['banner_image_url'], width=100)
+                st.progress(qset['success_rate'] / 100)
+                st.write(f"Nombre de questions: **{qset['number_of_questions']}**")
+                st.write(f"Créé par: **{qset['creator_username']}**")
+                st.write(f"Difficulté : **{qset['difficulty']}**")
+                with st.expander(label="Description"):
+                 st.write(f"{qset['description']}")
+                
+                if st.button(f"Répondre au set :blue[{qset['title']}]"):
+                    # Stocker l'ID du set sélectionné dans session_state
+                    st.session_state.selected_set_id = qset['_id']
+                    # Réinitialiser l'index de la question actuelle
+                    st.session_state.current_question_index = 0
+                    # Initialiser les réponses utilisateur avec la bonne taille
+                    st.session_state.user_answers = [None] * qset['number_of_questions']
+                    # Rafraîchir pour afficher le quiz
+                    st.rerun()
+
+
+
+
+def display_question_set(qset):
+    st.header(qset['title'])
+    st.write(qset['description'])
+    
+    if st.button("Répondre au set"):
+        start_quiz(qset)
+
+def start_quiz():
+    qset_id = st.session_state.get('selected_set_id')
+    
+    if qset_id is None:
+        st.error("Aucun set sélectionné.")
+        return
+    
+    # Récupérer le set sélectionné dans la base de données
+    qset = question_sets_collection.find_one({"_id": ObjectId(qset_id)})
+    
+    if qset is None:
+        st.error("Le set sélectionné n'existe pas.")
+        return
+    
+    current_index = st.session_state.current_question_index
+    total_questions = len(qset['questions'])
+
+    # Affichage de la question actuelle
+    if current_index < total_questions:
+        question = qset['questions'][current_index]
         
+        # Display question number and text as a subheader
+        st.subheader(f"Question {current_index + 1}/{total_questions}")
         
+        with st.container(border=True):
+            st.subheader(f"{question['text']}")
+            # Display options as radio buttons
+            user_answer = st.radio(
+                label="Choisissez une réponse:",
+                options=question['options'],
+                key=f"question_{current_index}"
+            )
+
         
+        # Stocker la réponse de l'utilisateur
+        if current_index < len(st.session_state.user_answers):
+            st.session_state.user_answers[current_index] = user_answer
         
+        # Bouton pour la question suivante
+        if st.button("Question suivante"):
+            st.session_state.current_question_index += 1
+            st.rerun()
+    else:
+        # Si toutes les questions ont été répondues, calcul du score
+        calculate_score(qset)
+
+
+
+def calculate_score(qset):
+    score = 0
+    corrections = []
+
+    for i, question in enumerate(qset['questions']):
+        user_answer = st.session_state.user_answers[i]
+        correct_answer = question['correct_answer']
+        
+        if user_answer == correct_answer:
+            score += 1
+        else:
+            corrections.append({
+                "question": question['text'],
+                "votre réponse": user_answer,
+                "bonne réponse": correct_answer
+            })
+
+    success_rate = (score / len(qset['questions'])) * 100
+    st.success(f"Votre score: {score}/{len(qset['questions'])} ({success_rate:.2f}%)")
+
+    # Display corrections if necessary
+    if corrections:
+        st.subheader("Corrections:")
+        for correction in corrections:
+            with st.container(border=True):
+                st.write(correction['question'])
+                if correction['votre réponse'] == correction['bonne réponse']:
+                    st.success(f"Votre réponse: {correction['votre réponse']}")
+                else:
+                    st.error(f"Votre réponse: {correction['votre réponse']}")
+                    st.success(f"Bonne réponse: {correction['bonne réponse']}")
+
+    # Update the database with the score
+    question_sets_collection.update_one(
+        {"_id": qset['_id']},
+        {"$push": {"completed_by": {"user_id": st.session_state.username, "score": success_rate}}}
+    )
+
+    # Reset for a new quiz
+    if st.button("Retourner à la liste des sets"):
+        del st.session_state.selected_set_id
+        del st.session_state.current_question_index
+        del st.session_state.user_answers
+        st.rerun()
+
+
+
+        
+# Afficher la page des sets de questions si aucune question n'est sélectionnée
+#if 'selected_set_id' not in st.session_state or st.session_state.selected_set_id is None:
+#   display_question_sets_page()
+#else:
+#    start_quiz()
+    
+def display_question_set(qset):
+    st.header(qset['title'])
+    st.write(qset['description'])
+    
+    if st.button("Répondre au set"):
+        start_quiz(qset)
+    
+def display_create_question_set_page():
+    st.title("Créer un Nouveau Set de Questions")
+
+    # Champs pour le titre, la difficulté et la description du set
+    title = st.text_input("Titre du set")
+    difficulty = st.selectbox("Difficulté", ["simple", "moyen", "difficile", "très complexe"])
+    description = st.text_area("Description", max_chars=100)
+
+    # Upload d'image pour la bannière
+    banner_image = st.file_uploader("Télécharger une image pour la bannière", type=['png', 'jpg'], accept_multiple_files=False)
+
+    # Initialisation de l'état des questions si ce n'est pas déjà fait
+    if 'questions' not in st.session_state:
+        st.session_state.questions = []
+
+    # Fonction pour ajouter une nouvelle question
+    def add_question():
+        new_question = {
+            "text": "",
+            "options": ["", "", "", ""],
+            "correct_answer": ""
+        }
+        st.session_state.questions.append(new_question)
+
+    # Bouton pour ajouter une nouvelle question
+    if st.button("Ajouter une question"):
+        add_question()
+
+    # Affichage des questions existantes
+    for idx, question in enumerate(st.session_state.questions):
+        with st.container(border=True):
+            st.subheader(f":blue[Question : {idx + 1}]")
+            question_text = st.text_input(f"Texte de la question {idx + 1}", value=question["text"], key=f"text_{idx}")
+            options = [st.text_input(f"Option {i+1} pour la question {idx + 1}", value=question["options"][i], key=f"option_{idx}_{i}") for i in range(4)]
+            correct_answer = st.selectbox(f"Réponse correcte pour la question {idx + 1}", options, key=f"correct_{idx}")
+
+            # Mise à jour des questions dans l'état
+            st.session_state.questions[idx] = {
+                "text": question_text,
+                "options": options,
+                "correct_answer": correct_answer
+            }
+
+
+            # Bouton pour retirer une question
+            if st.button(f"Retirer la question {idx + 1}", key=f"remove_{idx}"):
+                del st.session_state.questions[idx]
+                st.rerun()
+
+    # Validation du set
+    if st.button("Valider le set"):
+        if len(st.session_state.questions) == 0:
+            st.error("Vous devez ajouter au moins une question avant de valider le set.")
+        elif banner_image:
+            # Upload l'image sur Cloudinary et obtenir l'URL
+            result = cloudinary.uploader.upload(banner_image)
+            banner_image_url = result.get('url')
+
+            create_question_set(title, difficulty, description, st.session_state.questions,
+                                creator_id=st.session_state.username,
+                                creator_username=st.session_state.username,
+                                banner_image_url=banner_image_url)
+
+            st.success("Set créé avec succès!")
+            # Réinitialiser les questions après validation
+            st.session_state.questions.clear()
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+
+
 def get_db_connection():
     if 'db_connection' not in st.session_state:
         st.session_state.db_connection = MongoClient(mongo_uri)
@@ -127,8 +453,132 @@ def display_user_cards():
                 st.markdown(f"**Badges**: {badges_display}")
             
             
+
+
+
+#TODOLIST
+
+
+
+def create_todo_item(user_id, username, content, due_date, category, priority):
+    collection = get_todolist_collection()
+    item_id = str(uuid.uuid4())
+    creation_date = datetime.now()
+    
+    if isinstance(due_date, date):
+        due_date = datetime.combine(due_date, datetime.min.time())
+    
+    item = {
+        'item_id': item_id,
+        'user_id': user_id,
+        'username': username,
+        'creation_date': creation_date,
+        'due_date': due_date,
+        'status': 'non commencé',
+        'content': content,
+        'category': category,
+        'priority': priority
+    }
+    collection.insert_one(item)
+
+def display_create_todo_form():
+    st.header("Ajouter une nouvelle tâche")
+    user_id = st.session_state.get('user_id')
+    username = st.session_state.get('username')
+    
+    content = st.text_input("Contenu de la tâche")
+    due_date = st.date_input("Date de fin", min_value=datetime.now())
+    category = st.selectbox("Catégorie", ["Travail", "Personnel", "Urgent"])
+    priority = st.selectbox("Priorité", ["Basse", "Moyenne", "Haute"])
+    
+    if st.button("Ajouter la tâche"):
+        create_todo_item(user_id, username, content, due_date, category, priority)
+        st.success("Tâche ajoutée avec succès!")
+
+
+
+
+
+
+def get_user_todos(user_id):
+    collection = get_todolist_collection()
+    todos_cursor = collection.find({'user_id': user_id}).sort([('due_date', 1), ('status', 1)])
+    return list(todos_cursor)
+
+def update_todo_item(item_id, update_fields):
+    collection = get_todolist_collection()
+    
+    if 'due_date' in update_fields and isinstance(update_fields['due_date'], date):
+        update_fields['due_date'] = datetime.combine(update_fields['due_date'], datetime.min.time())
+    
+    collection.update_one({'item_id': item_id}, {'$set': update_fields})
+
+def delete_todo_item(item_id):
+    collection = get_todolist_collection()
+    collection.delete_one({'item_id': item_id})
+
+
+def display_todolist_page():
+    st.title("Todolist - Études")
+    
+    display_create_todo_form()
+    
+    user_id = st.session_state.get('user_id')
+    todos = get_user_todos(user_id)
+    
+    status_emojis = {
+        "non commencé": "🔴",
+        "en cours": "🟠",
+        "terminé": "✅"
+    }
+    
+    priority_emojis = {
+        "Basse": "🟢",
+        "Moyenne": "🟡",
+        "Haute": "🔴"
+    }
+    
+    for todo in todos:
+        status_emoji = status_emojis[todo['status']]
+        priority_emoji = priority_emojis[todo['priority']]
+        
+        # Checkbox to mark task as completed
+        is_checked = todo['status'] == 'terminé'
+        
+        # Display task with checkbox
+        with st.container(border=True):
+            col1, col2 = st.columns([0.01, 0.09])
+            with col1:
+                checked = st.checkbox("", value=is_checked, key=f"check_{todo['item_id']}")
+                if checked and not is_checked:
+                    update_todo_item(todo['item_id'], {'status': 'terminé'})
+                elif not checked and is_checked:
+                    update_todo_item(todo['item_id'], {'status': 'non commencé'})
             
-           
+            with col2:
+                task_content_style = f"text-decoration: line-through;" if checked else ""
+                st.markdown(f"<div style='{task_content_style}'>"
+                            f"{priority_emoji} {todo['content']}</div>", unsafe_allow_html=True)
+                st.write("")
+                with st.expander("Plus d'informations"):
+                    
+                    una_key = f"{uuid.uuid4()}"
+                    unb_key = f"{uuid.uuid4()}"
+                    unc_key = f"{uuid.uuid4()}"
+                    
+                    
+                    new_status = st.selectbox("Changer le statut", ["non commencé", "en cours", "terminé"], index=["non commencé", "en cours", "terminé"].index(todo['status']), key=una_key)
+                    new_due_date = st.date_input("Nouvelle date de fin", value=todo['due_date'], key=unb_key)
+                    new_content = st.text_area("Modifier le contenu", value=todo['content'], max_chars=50, key=unc_key)
+                    
+                    if st.button("Mettre à jour", key=f"update_{todo['item_id']}"):
+                        update_todo_item(todo['item_id'], {'status': new_status, 'due_date': new_due_date, 'content': new_content})
+                        st.success("Élément mis à jour avec succès!")
+                    
+                    if st.button("Supprimer définitivement", key=f"delete_{todo['item_id']}"):
+                        delete_todo_item(todo['item_id'])
+                        st.success("Élément supprimé!")
+
 def update_questions_with_unique_ids():
     questions = list(questions_collection.find())
     for question in questions:
@@ -178,7 +628,6 @@ def generate_unique_question_id(creator_name, creator_id):
            
             
 def report_question(unique_id, username, reason):
-    # Retrieve user data
     user_data = users_collection.find_one({"username": username}, {"user_id": 1})
     if user_data:
         report_data = {
@@ -187,7 +636,6 @@ def report_question(unique_id, username, reason):
             'reason': reason,
             'timestamp': datetime.now()
         }
-        # Update the question document by pushing to 'reports'
         result = questions_collection.update_one(
             {'unique_id': unique_id},
             {'$push': {'reports': report_data}}
@@ -201,25 +649,27 @@ def display_report_interface(unique_id):
     with st.expander("Signaler la question"):
         reason_key = f"report_reason_{unique_id}_{uuid.uuid4()}"
         button_key = f"send_report_{unique_id}_{uuid.uuid4()}"
-        reason = st.text_input(
-            "Raison du signalement (50 caractères max)", max_chars=50, key=reason_key
-        )
+        
+        reason = st.text_input("Raison du signalement (50 caractères max)", max_chars=50, key=reason_key)
+        
         if st.button("Envoyer le signalement", key=button_key):
             username = st.session_state.get('username')
+            
             if not username:
                 st.warning("Veuillez vous connecter pour signaler une question.")
                 return
-
-            # Check if the user has already reported this question
+            
+            # Vérifier si l'utilisateur a déjà signalé cette question
             existing_report = questions_collection.find_one(
                 {"unique_id": unique_id, "reports.user_id": users_collection.find_one({"username": username})['user_id']}
             )
+            
             if existing_report:
                 st.warning("Vous avez déjà signalé cette question.")
                 return
-
-            # Proceed to report the question if reason is provided
-            if reason:
+            
+            # Procéder au signalement si une raison est fournie
+            if reason.strip():
                 success = report_question(unique_id, username, reason)
                 if success:
                     st.success("Signalement envoyé.")
@@ -322,52 +772,34 @@ def display_advice():
 
 
 def display_moderation_page():
-    # Check if user is logged in by retrieving the username from session state
     username = st.session_state.get('username')
     if not username:
         st.warning("Veuillez vous connecter pour accéder à cette page.")
         return
-
-    # Check if user is a moderator by querying the 'users_collection' in MongoDB
-    try:
-        user_data = users_collection.find_one({"username": username}, {"is_moderator": 1})
-    except Exception as e:
-        st.error("Erreur de connexion à la base de données.")
-        return
-
-    # If the user is not a moderator or the field doesn't exist, display a warning
+    
+    user_data = users_collection.find_one({"username": username}, {"is_moderator": 1})
+    
     if not (user_data and user_data.get('is_moderator', False)):
         st.warning("Vous n'avez pas les droits d'accès à cette page.")
         return
-
-    # Display the moderation page if the user is a moderator
+    
     st.header("Modération des Signalements")
-
-    # Fetch all questions that have been reported (those with a 'reports' field)
-    try:
-        reported_questions = questions_collection.find({'reports.0': {'$exists': True}})
-    except Exception as e:
-        st.error("Erreur lors de la récupération des signalements.")
-        return
-
-    # Display each reported question with details
+    
+    reported_questions = questions_collection.find({'reports.0': {'$exists': True}})
+    
     for question in reported_questions:
         with st.container():
-            with st.container(border=True):
-                st.write(f"**Question:** **:blue[{question['question']}]**")
-                st.write(f"**ID de la Question:** **:blue[{question['_id']}]**")
-                st.write(f"**Créée par:** **:blue[{question.get('created_by', 'Inconnu')} (ID: {question.get('creator_id', 'Inconnu')})]**")
-
-                # Display each report related to the question
-                for report in question['reports']:
-                    st.write(f"**Signalé par:** **:blue[{report['username']} (ID: {report['user_id']})]**")
-                    st.write(f"**Motif du signalement:** **:blue[{report['reason']}]**")
-                    st.write(f"**Date du signalement:** **:blue[{report['timestamp'].strftime('%d %b %Y %H:%M')}]**")
-
-                # Button to delete the question
-                if st.button(":red[Supprimer la question]", key=f"delete_{question['_id']}"):
-                    questions_collection.delete_one({'_id': question['_id']})
-                    st.success("Question supprimée.")
+            st.write(f"**Question:** {question['question']}")
+            st.write(f"**ID de la Question:** {question['_id']}")
+            
+            for report in question['reports']:
+                st.write(f"**Signalé par:** {report['username']} (ID: {report['user_id']})")
+                st.write(f"**Motif du signalement:** {report['reason']}")
+                st.write(f"**Date du signalement:** {report['timestamp'].strftime('%d %b %Y %H:%M')}")
+            
+            if st.button(":red[Supprimer la question]", key=f"delete_{question['_id']}"):
+                questions_collection.delete_one({'_id': question['_id']})
+                st.success("Question supprimée.")
 
 
 
@@ -576,21 +1008,34 @@ def create_sidebar():
         if 'page' not in st.session_state:
             st.session_state.page = "Accueil"
         # Créez des sections dans la sidebar
-        st.sidebar.markdown("### Apprentissage")
+        st.sidebar.markdown("## Principal")
 
                     
         if st.sidebar.button("🏠 Accueil", key="home", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Accueil"
             collapse_sidebar()
+        if st.sidebar.button("📋 Todolist", key="todolist"):
+            st.session_state.page = "Todolist"
+            collapse_sidebar()
         if st.sidebar.button("📊 Tableau de bord", key="Tableau de bord", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Tableau de bord"
             collapse_sidebar()
+        # Nouveaux boutons pour les sets de questions
+        st.sidebar.markdown("#### Sets de questions")
+        if st.sidebar.button("🗂️ Sets de Questions", key="question_sets"):
+            st.session_state.page = "Sets de Questions"
+            collapse_sidebar()
+        if st.sidebar.button("➕ Créer un Set", key="create_set"):
+            st.session_state.page = "Créer un Set"
+            collapse_sidebar()
+        st.sidebar.markdown("#### QCM")
         if st.sidebar.button("📚 Qcm", key="Qcm", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Qcm"
             collapse_sidebar()
         if st.sidebar.button("📝 Créer un Qcm", key="create_question", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Créer une question"
             collapse_sidebar()
+        st.sidebar.markdown("#### Schémas")
         if st.sidebar.button("🖼️ Schémas", key="schemas", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Schémas"
             collapse_sidebar()
@@ -598,7 +1043,7 @@ def create_sidebar():
             st.session_state.page = "Ajouter un schéma"
             collapse_sidebar()
 
-        st.sidebar.markdown("### Communauté")
+        st.sidebar.markdown("## Communauté")
         if st.sidebar.button("💬 Chat", key="chat", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Chat"
             collapse_sidebar()
@@ -606,7 +1051,7 @@ def create_sidebar():
             st.session_state.page = "découvrir"
             collapse_sidebar()
 
-        st.sidebar.markdown("### Compte")
+        st.sidebar.markdown("## Compte")
         if st.sidebar.button("👤 Mon compte", key="account", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Mon compte"
             collapse_sidebar()
@@ -622,26 +1067,6 @@ def create_sidebar():
         if st.sidebar.button("🛠️ Modération", key="moderation"):
             st.session_state.page = "Modération"
             collapse_sidebar()
-    st.markdown("""
-        <style>
-        .sidebar .sidebar-content {
-            background-image: linear-gradient(#2e7bcf,#2e7bcf);
-            color: white;
-        }
-        .sidebar .sidebar-content .stButton>button {
-            width: 100%;
-            text-align: left;
-            padding: 10px;
-            background-color: transparent;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-        .sidebar .sidebar-content .stButton>button:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        </style>
-        """, unsafe_allow_html=True)
 
     return st.session_state.page
 
@@ -907,7 +1332,7 @@ def display_schemas_page():
 
 def display_support_page():
     st.title("Nous soutenir")
-    st.subheader("Vous appréciez la plateforme et la gratuité proposée ? Vous pouvez me soutenir en regardant une publicité.")
+    st.subheader("Vous appréciez la plateforme et la gratuité proposée ? Vous pouvez me soutenir financièrement ici :")
 
     # Générer un ID utilisateur unique avec UUID4
     user_id = str(uuid.uuid4())
@@ -939,10 +1364,9 @@ def display_support_page():
             invokeApplixirVideoUnit(options);  // Lire la vidéo publicitaire
         }};
     </script>
-    <button type="button" id="showRewardAdButton">Regarder la pub</button>
     """
-
-    # Utiliser components.html pour rendre le HTML et JavaScript dans Streamlit
+    st.link_button("Soutenez moi en cliquant ici", "https://buymeacoffee.com/maxx.abrt")
+    st.success("Les dons vont entièrement être utilisés dans l'app, pour payer l'hébergement ou alors développer d'autres fonctionnalités !")
     components.html(applixir_html, height=300)
 
 
@@ -1021,7 +1445,6 @@ def update_messages():
 
 def display_chat():
     st.subheader("Chat en direct")
-    st.write("Discutez en temps réel avec d'autres utilisateurs de la plateforme.")
 
     # Styles CSS améliorés
     st.markdown("""
@@ -1081,6 +1504,8 @@ def display_chat():
 
 
     messages = get_messages()
+    st.title("Chat")
+    st.write("Discutez en temps réel avec d'autres utilisateurs de la plateforme.")
 
     message = st.text_input("Entrez votre message")
     if st.button("Envoyer"):
@@ -1134,37 +1559,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
     
     update_messages()
     
-    
-    # Mise à jour périodique
-    if 'update_counter' not in st.session_state:
-        st.session_state.update_counter = 0
-    
-    st.session_state.update_counter += 1
-    if st.session_state.update_counter % 10 == 0:  # Mise à jour toutes les 2.5 secondes (10 * 0.25s)
-        update_messages()
-        time.sleep(0.25)
-        st.rerun()
-    while True:
-            time.sleep(4.5)
-            update_messages()
-            st.rerun()
 
 def get_user_domain(username):
     user = db['users'].find_one({"username": username})
     return user['domain'] if user else "Non spécifié"
     
-
-# Fonction pour initialiser la base de données du chat (inchangée)
-def init_chat_db():
-    conn = sqlite3.connect('quiz_app.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS chat_messages
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT,
-                  message TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
 
 # Fonction pour ajouter un message au chat
 def add_message(username, message):
@@ -1174,14 +1573,6 @@ def add_message(username, message):
         "message": message,
         "timestamp": datetime.now()
     })
-
-def change_username(old_username, new_username):
-    collection = db['users']
-    if collection.find_one({"username": new_username}):
-        return False
-    else:
-        collection.update_one({"username": old_username}, {"$set": {"username": new_username}})
-        return True
 
 def display_account_details(username):
     collection = db['users']
@@ -1215,6 +1606,12 @@ def discover_page():
                         st.write(f"**Points Quizz**: **:blue[{user['points']}]**")
                         st.write(f"**Quizz Completés**: **:blue[{user['quizzes_completed']}]**")
                         st.write(f"**Points Communautaires** (*nombre de questions soumises aux quizs communautaires*): **:blue[{user['community_points']}]**")
+                        all_users = list(users_collection.find({}, {"username": 1, "points": 1, "quizzes_completed": 1, "community_points": 1, "registration_date": 1, "badges": 1}))
+                        user_info = random.sample(all_users, min(20, len(all_users)))
+                        for user in user_info: 
+                             badges_display = "".join([badge_info["emoji"] for badge_info in user["badges"].values() if badge_info["level"] > 0])
+                             if badges_display:
+                              st.write(f"**Badges**: {badges_display}")
             else:
                 st.warning("Utilisateur non trouvé.")
 
@@ -1308,40 +1705,6 @@ def send_email(name, email, message):
     return response.status_code == 201
 
 
-st.markdown("""
-<style>
-    .sidebar .sidebar-content {
-        background-image: linear-gradient(#2e7bcf,#2e7bcf);
-        color: white;
-    }
-    .sidebar-nav {
-        padding-top: 30px;
-    }
-    .sidebar-nav ul {
-        padding-left: 0;
-    }
-    .sidebar-nav li {
-        list-style-type: none;
-        margin-bottom: 20px;
-    }
-    .nav-link {
-        background-color: #4CAF50;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 5px;
-        text-decoration: none;
-        display: block;
-        transition: background-color 0.3s;
-    }
-    .nav-link:hover {
-        background-color: #45a049;
-    }
-    .nav-subtitle {
-        font-size: 12px;
-        color: #ddd;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # Fonction pour créer un bouton radio personnalisé avec sous-titre
 def custom_radio(label, options, subtitles):
@@ -1417,6 +1780,8 @@ def main():
         st.session_state.page = "Accueil"
         st.session_state.close_sidebar = True
         display_help_button("Accueil")
+        st.title("Bienvenue sur votre application")
+
         st.success(f"Bienvenue, **{st.session_state.username}**!")
         st.write(f"Bienvenue sur cette plateforme d'apprentissage collaboratif ! Le principe est de pouvoir réviser à plusieurs, créer des questions et des Qcm communautaires, et s'entraider dans le domaine de la santé !")
         st.write("*Le développement est toujours actif, n'hésitez pas à contacter le développeur en cas de retour ou problème !*")
@@ -1430,6 +1795,17 @@ def main():
      display_support_page()
 
      
+     
+     
+    if choice == "Sets de Questions":
+        if 'selected_set_id' in st.session_state and st.session_state.selected_set_id is not None:
+         start_quiz()
+        else:
+         display_question_sets_page()
+        
+        
+    elif choice == "Créer un Set":
+        display_create_question_set_page()
      
     elif choice == "Schémas":
      display_help_button("Schémas", "content")
@@ -1506,7 +1882,7 @@ def main():
                         # Si aucun filtre n'est appliqué, afficher toutes les questions correspondant à la recherche
                         filtered_questions = [q for q in questions if search_query.lower() in q["question"].lower()]
             # Pagination setup
-            items_per_page = 10
+            items_per_page = 5
             total_questions = len(filtered_questions)
             num_pages = (total_questions - 1) // items_per_page + 1
 
@@ -1524,11 +1900,13 @@ def main():
             user_answers = []
                     # Afficher discrètement le créateur et la date
             st.write("---") 
+            
             if current_questions:
                 for i, question in enumerate(current_questions):
+                    unique_id = question.get('unique_id')
                     difficulty = question.get('difficulty', 1)
                     emoji = difficulty_emojis.get(difficulty, "🟢")
-                    st.subheader(f"{emoji} - Question {i+1} (ID: {question.get('unique_id')})")
+                    st.subheader(f"{emoji} - Question {i+1}")
                     # Use a container for each question to improve layout control
                     with st.container():
                         username = st.session_state.get('username', None)
@@ -1554,7 +1932,9 @@ def main():
                         
                         
                         
-                        display_report_interface(question['unique_id'])
+                        unique_id = question.get('unique_id')
+                        display_report_interface(unique_id)
+
                          # Display creator info in a popover
                         with st.expander(f"Voir le profil de **:blue[{question.get('created_by', 'Inconnu')}]**"):
                             creator_id = question.get('creator_id', 'Inconnu')
@@ -1565,15 +1945,28 @@ def main():
                                 - Nom de l'utilisateur: **{created_by}**
                                 - ID Utilisateur: **{creator_id}**
                                 - Question faite le : **{creation_date}**
+                                - ID de la question : **{question.get('unique_id')}**
                             """)
-
-                    st.markdown(
-                        f"<span style='color:#60b4ff; font-weight:bold; font-size:18px;'>{question['question']}</span>",
-                        unsafe_allow_html=True
+                    def display_question(question, index):
+                     key = (f"question_{index}_answer")
+                     if key not in st.session_state:
+                      st.session_state[key] = None
+                      st.subheader(f"Question {index + 1}: {question['question']}")
+                      selected_option = st.radio(
+                            "Choisissez une réponse:",
+                            question['options'],
+                            index=question['options'].index(st.session_state[key]) if st.session_state[key] else 0,
+                            key=key
                         )
 
+                        # Mettre à jour session_state avec la réponse sélectionnée
+                      st.session_state[key] = selected_option
+                      display_question(question, i)
 
 
+
+                        
+                        
                     if question["type"] == "QCM":
                         user_answer = st.radio(f"*Choisissez la bonne réponse pour la question {start_idx + i + 1}:*", question["options"])
                     elif question["type"] == "Vrai/Faux":
@@ -1597,9 +1990,9 @@ def main():
                         'question_id': question['_id']
                     })
 
-                    if existing_interaction:
+                if existing_interaction:
                         st.warning("Vous avez déjà voté pour cette question.")
-                    else:
+                else:
                         if choice == '👍 Like':
                             update_likes_dislikes(question['_id'], 'like', username)
                             st.write(f"*:blue[Likes: {question.get('likes', 0) + 1}]*")
@@ -1609,7 +2002,7 @@ def main():
                             st.write(f"*:blue[Likes: {question.get('likes', 0)}]*")
                             st.write(f"*:red[Dislikes: {question.get('dislikes', 0) + 1}]*")
 
-                    st.write("---")  # Séparateur entre les questions
+            st.write("---")  # Séparateur entre les questions
                         
             # Initialiser le temps de dernier clic s'il n'existe pas
             if 'last_click_time' not in st.session_state:
@@ -1653,9 +2046,10 @@ def main():
                     if user_answer.lower() == question["correct_answer"].lower():
                         score += 1
                         st.success(f"Question {i+1}: Correct!")
+                        st.write(f"Explication - Question {i+1} : {question.get('explanation', 'Aucune explication fournie.')}")
                     else:
                         st.error(f"Question {i+1}: Incorrect. La bonne réponse était: {question['correct_answer']}")
-
+                        st.write(f"Explication - Question {i+1} : {question.get('explanation', 'Aucune explication fournie.')}")
                     domain = question.get("domain", "Unknown")
                     subdomain = question.get("subdomain", "Unknown")
                     subsystem = question.get("subsystem", "Unknown")
@@ -1666,7 +2060,8 @@ def main():
                         subsystem_counts[subsystem] = subsystem_counts.get(subsystem, 0) + 1
 
                 update_user_stats(st.session_state.username, points=score, quizzes_completed=1)
-                st.info(f"Votre score pour cette page: {score}/{len(current_questions)}")
+                st.write("---")
+                st.success(f"Votre score pour cette page: {score}/{len(current_questions)}")
                 quiz_interactions_collection.insert_one({
                     "user_id": st.session_state.username,
                     "timestamp": datetime.now(),
@@ -1678,7 +2073,9 @@ def main():
 
 
 
-
+    elif choice == "Todolist":
+        display_todolist_page()
+        
     if choice == "Tableau de bord":
         st.header("Tableau de Bord - Stats")
 
@@ -1832,6 +2229,10 @@ def main():
         else:
              st.error("La question ne peut pas être vide (Le champ **:blue[Question]** tout au dessus, ensuite remplissez vos champs d'entrée et configurez votre question).")
 
+
+
+
+
     if choice == "Chat":
         display_help_button("Chat")
         display_chat()
@@ -1848,21 +2249,22 @@ def main():
      if st.session_state.username:
             with st.container(border=True):
              display_account_details(st.session_state.username)
+             all_users = list(users_collection.find({}, {"username": 1, "user_id": 1, "points": 1, "quizzes_completed": 1, "community_points": 1, "registration_date": 1, "badges": 1}))
+             user_info = random.sample(all_users, min(20, len(all_users)))
+             for user in user_info: 
+                             badges_display = "".join([badge_info["emoji"] for badge_info in user["badges"].values() if badge_info["level"] > 0])
+                             if badges_display:
+                              st.write(f"**Badges**: {badges_display}")
+
              
 
-     new_username = st.text_input("Nouveau nom d'utilisateur", key="new_username")
-     if st.button("Changer le nom d'utilisateur"):
-     
-      if new_username:
-       if change_username(st.session_state.username, new_username):
-            st.success("Nom d'utilisateur mis à jour avec succès!")
-            st.session_state.username = new_username  # Mettre à jour la session
-      else:
-            st.error("Ce nom d'utilisateur existe déjà, veuillez en choisir un autre.")
-          
      with st.container(border=True):
       display_badge_progress(user_data)
- 
+     user_id = user.get('user_id', 'Inconnu')
+     with st.expander("Infos pour les nerds 🤓 :"):
+         st.info(f"Session ID: {get_session_id()}")
+         st.info(f"User ID : {user_id}")
+    
     if choice == "découvrir":
 
       display_help_button("découvrir")
