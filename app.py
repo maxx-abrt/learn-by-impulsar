@@ -582,6 +582,7 @@ def display_todolist_page():
 def update_questions_with_unique_ids():
     questions = list(questions_collection.find())
     for question in questions:
+        
         if 'unique_id' not in question or not question['unique_id']:
             creator_name = question.get('created_by', 'Unknown')
             creator_id = question.get('creator_id', None)
@@ -628,19 +629,22 @@ def generate_unique_question_id(creator_name, creator_id):
            
             
 def report_question(unique_id, username, reason):
-    user_data = users_collection.find_one({"username": username}, {"user_id": 1})
-    if user_data:
-        report_data = {
-            'username': username,
-            'user_id': user_data['user_id'],
-            'reason': reason,
-            'timestamp': datetime.now()
-        }
-        result = questions_collection.update_one(
-            {'unique_id': unique_id},
-            {'$push': {'reports': report_data}}
-        )
-        return result.modified_count > 0
+    try:
+        user_data = users_collection.find_one({"username": username}, {"user_id": 1})
+        if user_data:
+            report_data = {
+                'username': username,
+                'user_id': user_data['user_id'],
+                'reason': reason,
+                'timestamp': datetime.now()
+            }
+            result = questions_collection.update_one(
+                {'unique_id': unique_id},
+                {'$push': {'reports': report_data}}
+            )
+            return result.modified_count > 0
+    except Exception as e:
+        print(f"Error reporting question: {e}")
     return False
 
 
@@ -659,25 +663,18 @@ def display_report_interface(unique_id):
                 st.warning("Veuillez vous connecter pour signaler une question.")
                 return
             
-            # Vérifier si l'utilisateur a déjà signalé cette question
-            existing_report = questions_collection.find_one(
-                {"unique_id": unique_id, "reports.user_id": users_collection.find_one({"username": username})['user_id']}
-            )
-            
-            if existing_report:
-                st.warning("Vous avez déjà signalé cette question.")
-                return
-            
-            # Procéder au signalement si une raison est fournie
             if reason.strip():
-                success = report_question(unique_id, username, reason)
-                if success:
-                    st.success("Signalement envoyé.")
-                else:
-                    st.error("Erreur lors de l'envoi du signalement.")
+                try:
+                    success = report_question(unique_id, username, reason)
+                    
+                    if success:
+                        st.success("Signalement envoyé.")
+                    else:
+                        st.error("Erreur lors de l'envoi du signalement.")
+                except Exception as e:
+                    st.error(f"Erreur lors de l'enregistrement du signalement : {str(e)}")
             else:
                 st.warning("Veuillez fournir une raison pour le signalement.")
-                
 
 
 
@@ -1020,6 +1017,13 @@ def create_sidebar():
         if st.sidebar.button("📊 Tableau de bord", key="Tableau de bord", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Tableau de bord"
             collapse_sidebar()
+        st.sidebar.markdown("#### QCM")
+        if st.sidebar.button("📚 Qcm", key="Qcm", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
+            st.session_state.page = "Qcm"
+            collapse_sidebar()
+        if st.sidebar.button("📝 Créer un Qcm", key="create_question", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
+            st.session_state.page = "Créer une question"
+            collapse_sidebar()
         # Nouveaux boutons pour les sets de questions
         st.sidebar.markdown("#### Sets de questions")
         if st.sidebar.button("🗂️ Sets de Questions", key="question_sets"):
@@ -1028,13 +1032,7 @@ def create_sidebar():
         if st.sidebar.button("➕ Créer un Set", key="create_set"):
             st.session_state.page = "Créer un Set"
             collapse_sidebar()
-        st.sidebar.markdown("#### QCM")
-        if st.sidebar.button("📚 Qcm", key="Qcm", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
-            st.session_state.page = "Qcm"
-            collapse_sidebar()
-        if st.sidebar.button("📝 Créer un Qcm", key="create_question", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
-            st.session_state.page = "Créer une question"
-            collapse_sidebar()
+
         st.sidebar.markdown("#### Schémas")
         if st.sidebar.button("🖼️ Schémas", key="schemas", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
             st.session_state.page = "Schémas"
@@ -1300,14 +1298,14 @@ def display_schemas_page():
         st.info("Aucun schéma disponible pour cette sélection.")
     else:
         # Pagination
-        items_per_page = 5
+        items_per_page = 3
         num_pages = (len(filtered_schemas) - 1) // items_per_page + 1
         page = st.number_input("Page", min_value=1, max_value=num_pages, value=1)
         start_idx = (page - 1) * items_per_page
         end_idx = start_idx + items_per_page
         
         for schema in filtered_schemas[start_idx:end_idx]:
-            with st.container():
+            with st.container(border=True):
                 st.subheader(schema.get("title", "Sans titre"))
                 if "url" in schema:
                     st.image(schema["url"])
@@ -1326,7 +1324,7 @@ def display_schemas_page():
                         else:
                             st.error(f"Élément {i+1}. Incorrect. La bonne réponse est : {correct_answer}")
                 
-                st.markdown("---")
+            st.markdown("---")
         
         st.write(f"Page {page} sur {num_pages}")
 
@@ -1907,6 +1905,7 @@ def main():
                     difficulty = question.get('difficulty', 1)
                     emoji = difficulty_emojis.get(difficulty, "🟢")
                     st.subheader(f"{emoji} - Question {i+1}")
+                    
                     # Use a container for each question to improve layout control
                     with st.container():
                         username = st.session_state.get('username', None)
@@ -1934,9 +1933,9 @@ def main():
                         
                         unique_id = question.get('unique_id')
                         display_report_interface(unique_id)
-
+                        
                          # Display creator info in a popover
-                        with st.expander(f"Voir le profil de **:blue[{question.get('created_by', 'Inconnu')}]**"):
+                        with st.expander(f"Voir le profil de **:blue[{question.get('created_by', 'Inconnu')}]** *(créateur de la question)*"):
                             creator_id = question.get('creator_id', 'Inconnu')
                             created_by = question.get('created_by', 'Inconnu')
                             creation_date = question.get('creation_date').strftime('%d %b') if question.get('creation_date') else 'Date inconnue'
@@ -1947,6 +1946,7 @@ def main():
                                 - Question faite le : **{creation_date}**
                                 - ID de la question : **{question.get('unique_id')}**
                             """)
+                    st.write(f"**:blue[{question.get('question', 'Texte de la question non disponible')}]**")
                     def display_question(question, index):
                      key = (f"question_{index}_answer")
                      if key not in st.session_state:
@@ -1960,8 +1960,8 @@ def main():
                         )
 
                         # Mettre à jour session_state avec la réponse sélectionnée
-                      st.session_state[key] = selected_option
-                      display_question(question, i)
+                     st.session_state[key] = selected_option
+                     display_question(question, i)
 
 
 
