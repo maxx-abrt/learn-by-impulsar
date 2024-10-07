@@ -59,29 +59,31 @@ quiz_interactions_collection = db['quiz_interactions']
 users_collection = db['users']
 interactions_collection = db['user_interactions']
 questions_collection = db['questions']
+answered_questions_collection = db['answered_questions']
 def get_todolist_collection():
     return db['todolist']
-def get_question_sets_collection():
-    return db['question_sets']
-question_sets_collection = db['question_sets']
+
     
-    
-    
-def create_question_set(title, difficulty, description, questions, creator_id, creator_username, banner_image_url):
-    question_set = {
-        "_id": ObjectId(),
-        "title": title,
-        "number_of_questions": len(questions),
-        "difficulty": difficulty,
-        "description": description,
-        "questions": questions,
-        "success_rate": 0.0,
-        "creator_id": creator_id,
-        "creator_username": creator_username,
-        "completed_by": [],
-        "banner_image_url": banner_image_url
-    }
-    get_question_sets_collection().insert_one(question_set)
+# Déclarations globales
+domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
+
+subdomains = {
+    "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
+    "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
+    "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
+    "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
+    "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
+    "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
+    "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
+}
+
+subsystems = {
+    "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
+    "Système circulatoire": ["Cœur", "Artères", "Veines"],
+    "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
+    "Système urinaire": ["Reins", "Vessie", "Urètres"],
+    "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
+}
 
 
 @st.cache_data(show_spinner=False)
@@ -136,6 +138,262 @@ def manage_session():
 manage_session()
 
 
+
+
+def display_custom_qcm_page():
+    st.title("QCM Personnalisé")
+
+    if 'quiz_started' in st.session_state and st.session_state['quiz_started'] and not st.session_state.get('quiz_finished', False):
+        start_custom_quiz()
+        return
+
+    # Sélection des critères
+    selected_domain = st.selectbox("Choisissez un domaine", domains)
+    selected_subdomain = st.selectbox("Choisissez un sous-domaine", subdomains.get(selected_domain, []))
+    selected_subsystem = st.selectbox("Choisissez un sous-système",
+                                      subsystems.get(selected_subdomain, [])) if selected_domain == 'Anatomie' else None
+
+    # Récupérer l'utilisateur actuel
+    username = st.session_state.get('username')
+
+    # Récupérer les questions auxquelles l'utilisateur a déjà répondu
+    answered_questions_ids = get_answered_questions_ids(username, selected_domain, selected_subdomain, selected_subsystem)
+
+    # Compter les questions disponibles
+    all_questions = list(questions_collection.find({
+        'domain': selected_domain,
+        'subdomain': selected_subdomain,
+        'subsystem': selected_subsystem
+    }))
+    
+    available_questions = [q for q in all_questions if q['_id'] not in answered_questions_ids]
+    
+    if not available_questions:
+        st.warning("Vous avez déjà répondu à toutes les questions de cette sélection. Vous allez refaire des questions déjà répondues.")
+        available_questions = all_questions  # Réinitialiser pour permettre de refaire les questions
+
+    num_questions = len(available_questions)
+    st.write(f"Nombre de questions disponibles : :blue-background[{num_questions}]")
+
+    # Slider pour sélectionner le nombre de questions
+    num_selected_questions = st.slider(
+        'Nombre de questions à répondre',
+        min_value=0,
+        max_value=num_questions,
+        value=1
+    )
+
+    # Bouton pour démarrer le quiz
+    if st.button("Répondre aux questions sélectionnées"):
+        if num_selected_questions > 0:  # Vérifie qu'au moins une question est sélectionnée
+            st.session_state['quiz_started'] = True
+            st.session_state['selected_questions'] = random.sample(available_questions, num_selected_questions)
+            st.session_state['current_question_index'] = 0
+            st.session_state['user_answers'] = [None] * num_selected_questions
+            st.session_state['quiz_finished'] = False  # Réinitialiser l'état du quiz terminé
+            st.rerun()
+        else:
+            st.error("Veuillez sélectionner au moins une question pour commencer le quiz.")
+
+def get_answered_questions_ids(username, domain, subdomain, subsystem):
+    user_data = answered_questions_collection.find_one({"username": username})
+    
+    if not user_data:
+        return []
+
+    key = f"{domain}_{subdomain}_{subsystem}"
+    
+    return user_data.get(key, [])
+
+def update_answered_questions(username, question_ids):
+    key = f"{selected_domain}_{selected_subdomain}_{selected_subsystem}"
+    
+    answered_questions_collection.update_one(
+        {"username": username},
+        {"$addToSet": {key: {"$each": question_ids}}},
+        upsert=True  # Crée un document si l'utilisateur n'existe pas encore dans la collection
+    )
+
+
+
+
+
+def start_custom_quiz():
+    if 'quiz_started' not in st.session_state or not st.session_state['quiz_started']:
+        return
+
+    current_index = st.session_state.current_question_index
+    questions = st.session_state.selected_questions
+
+    if current_index < len(questions):
+        question = questions[current_index]
+            # Display creator information
+        creator_id = question.get('creator_id', 'Inconnu')
+        created_by = question.get('created_by', 'Inconnu')
+        creation_date = question.get('creation_date').strftime('%d %b') if question.get('creation_date') else 'Date inconnue'
+            
+        user_info = get_user_data(created_by)  # Fetch user data from the database
+        badges_display = "".join([badge_info["emoji"] for badge_info in user_info["badges"].values() if badge_info["level"] > 0])
+
+                
+        with st.container(border=True):
+            
+            st.subheader(f"Question {current_index + 1}/{len(questions)}")
+            st.subheader(f":blue[{question.get('question', 'Texte non disponible')}]")
+            st.write(f"Question créée par : :blue[{created_by}] - Badges: {badges_display}")
+
+
+
+                
+
+            if question['type'] == "QCM":
+                user_answer = st.radio(
+                    "Choisissez une réponse:",
+                    question['options'],
+                    key=f"question_{current_index}"
+                )
+            elif question['type'] == "Vrai/Faux":
+                user_answer = st.radio(
+                    "Choisissez:",
+                    ["Vrai", "Faux"],
+                    key=f"vrai_faux_{current_index}"
+                )
+
+
+            # Stocker la réponse de l'utilisateur
+            st.session_state.user_answers[current_index] = user_answer
+
+        # Vérifier si c'est la dernière question
+        if current_index == len(questions) - 1:
+            button_label = "Finir le QCM"
+        else:
+            button_label = "Question suivante"
+
+
+        # Bouton pour passer à la question suivante ou finir le quiz
+        if st.button(button_label):
+            if current_index < len(questions) - 1:
+                st.session_state.current_question_index += 1
+                st.rerun()
+            else:
+                # Marquer le quiz comme terminé
+                st.session_state.quiz_finished = True
+                display_results()
+
+
+
+def get_user_data(username):
+    # Simulate fetching user data from a database
+    return users_collection.find_one({"username": username})
+
+def display_results():
+    score = 0
+    corrections = []
+    
+    for i, question in enumerate(st.session_state.selected_questions):
+        user_answer = st.session_state.user_answers[i]
+        correct_answer = question.get('correct_answer', None)
+        question_text = question.get('question', 'Texte non disponible')
+
+        if user_answer == correct_answer:
+            score += 1
+        else:
+            corrections.append({
+                "question": question_text,
+                "votre réponse": user_answer,
+                "bonne réponse": correct_answer
+            })
+
+    success_rate = (score / len(st.session_state.selected_questions)) * 100
+
+    # Mise à jour des questions répondues dans la base de données après avoir terminé le quiz
+    update_answered_questions(st.session_state.username, [q['_id'] for q in st.session_state.selected_questions])
+
+    st.title("Résultats du QCM")
+    st.success(f"Votre score: {score}/{len(st.session_state.selected_questions)} ({success_rate:.2f}%)")
+
+    # Afficher les corrections si nécessaire
+    if corrections:
+        st.subheader("Corrections:")
+        for correction in corrections:
+            with st.container():
+                st.write(correction['question'])
+                if correction['votre réponse'] == correction['bonne réponse']:
+                    st.success(f"Votre réponse: {correction['votre réponse']}")
+                else:
+                    st.error(f"Votre réponse: {correction['votre réponse']}")
+                    st.success(f"Bonne réponse: {correction['bonne réponse']}")
+
+    # Ajouter un bouton pour terminer le QCM et revenir à la page principale
+    if st.button("Terminer le QCM"):
+        keys_to_delete = ['quiz_started', 'selected_questions', 'current_question_index', 'user_answers', 'quiz_finished']
+        for key in keys_to_delete:
+            if key in st.session_state:
+                del st.session_state[key]
+        display_custom_qcm_page()
+    
+
+def get_answered_questions(username, domain, subdomain, subsystem):
+    user_data = users_collection.find_one({"username": username})
+    answered_questions = user_data.get('answered_questions', {})
+    
+    key = f"{domain}_{subdomain}_{subsystem}"
+    
+    return answered_questions.get(key, [])
+
+def update_answered_questions(username, question_ids):
+    users_collection.update_one(
+        {"username": username},
+        {"$addToSet": {"answered_questions": {"$each": question_ids}}}
+    )
+
+
+def calculate_score():
+    score = 0
+    corrections = []
+    
+    for i, question in enumerate(st.session_state.selected_questions):
+        user_answer = st.session_state.user_answers[i]
+        correct_answer = question.get('correct_answer', None)
+        
+        question_text = question.get('text', 'Texte non disponible')
+        
+        if user_answer == correct_answer:
+            score += 1
+        else:
+            corrections.append({
+                "question": question_text,
+                "votre réponse": user_answer,
+                "bonne réponse": correct_answer
+            })
+    
+    success_rate = (score / len(st.session_state.selected_questions)) * 100
+    st.success(f"Votre score: {score}/{len(st.session_state.selected_questions)} ({success_rate:.2f}%)")
+    
+    # Afficher les corrections si nécessaire
+    if corrections:
+        st.subheader("Corrections:")
+        for correction in corrections:
+            with st.container():
+                st.write(correction['question'])
+                if correction['votre réponse'] == correction['bonne réponse']:
+                    st.success(f"Votre réponse: {correction['votre réponse']}")
+                else:
+                    st.error(f"Votre réponse: {correction['votre réponse']}")
+                    st.success(f"Bonne réponse: {correction['bonne réponse']}")
+
+    # Ajouter un bouton pour terminer le QCM et revenir à la page principale
+    if st.button("Terminer le QCM"):
+        del st.session_state.quiz_started
+        del st.session_state.selected_questions
+        del st.session_state.current_question_index
+        del st.session_state.user_answers
+        
+        # Retourner à la page principale des questions personnalisées
+        display_custom_qcm_page()
+    
+    
+    
 def update_likes_dislikes(question_id, action, username):
                     existing_interaction = interactions_collection.find_one({
                         'username': username,
@@ -172,239 +430,7 @@ if 'current_question_index' not in st.session_state:
     st.session_state.current_question_index = 0
 if 'user_answers' not in st.session_state:
     st.session_state.user_answers = []
-
-def display_question_sets_page():
-    st.title("Sets de Questions")
     
-    # Récupérer les sets de questions depuis la base de données
-    question_sets = list(question_sets_collection.find())
-    
-    # Créer des colonnes pour disposer les cartes
-    cols = st.columns(2)  # Ajustez le nombre de colonnes selon vos besoins
-    
-    for idx, qset in enumerate(question_sets):
-        with cols[idx % 2]:  # Distribuer les sets dans les colonnes
-            with st.container(border=True):
-                st.subheader(qset['title'])
-                st.image(qset['banner_image_url'], width=100)
-                st.progress(qset['success_rate'] / 100)
-                st.write(f"Nombre de questions: **{qset['number_of_questions']}**")
-                st.write(f"Créé par: **{qset['creator_username']}**")
-                st.write(f"Difficulté : **{qset['difficulty']}**")
-                with st.expander(label="Description"):
-                 st.write(f"{qset['description']}")
-                
-                if st.button(f"Répondre au set :blue[{qset['title']}]"):
-                    # Stocker l'ID du set sélectionné dans session_state
-                    st.session_state.selected_set_id = qset['_id']
-                    # Réinitialiser l'index de la question actuelle
-                    st.session_state.current_question_index = 0
-                    # Initialiser les réponses utilisateur avec la bonne taille
-                    st.session_state.user_answers = [None] * qset['number_of_questions']
-                    # Rafraîchir pour afficher le quiz
-                    st.rerun()
-
-
-
-
-def display_question_set(qset):
-    st.header(qset['title'])
-    st.write(qset['description'])
-    
-    if st.button("Répondre au set"):
-        start_quiz(qset)
-
-def start_quiz():
-    qset_id = st.session_state.get('selected_set_id')
-    
-    if qset_id is None:
-        st.error("Aucun set sélectionné.")
-        return
-    
-    # Récupérer le set sélectionné dans la base de données
-    qset = question_sets_collection.find_one({"_id": ObjectId(qset_id)})
-    
-    if qset is None:
-        st.error("Le set sélectionné n'existe pas.")
-        return
-    
-    current_index = st.session_state.current_question_index
-    total_questions = len(qset['questions'])
-
-    # Affichage de la question actuelle
-    if current_index < total_questions:
-        question = qset['questions'][current_index]
-        
-        # Display question number and text as a subheader
-        st.subheader(f"Question {current_index + 1}/{total_questions}")
-        
-        with st.container(border=True):
-            st.subheader(f"{question['text']}")
-            # Display options as radio buttons
-            user_answer = st.radio(
-                label="Choisissez une réponse:",
-                options=question['options'],
-                key=f"question_{current_index}"
-            )
-
-        
-        # Stocker la réponse de l'utilisateur
-        if current_index < len(st.session_state.user_answers):
-            st.session_state.user_answers[current_index] = user_answer
-        
-        # Bouton pour la question suivante
-        if st.button("Question suivante"):
-            st.session_state.current_question_index += 1
-            st.rerun()
-    else:
-        # Si toutes les questions ont été répondues, calcul du score
-        calculate_score(qset)
-
-
-
-def calculate_score(qset):
-    score = 0
-    corrections = []
-
-    for i, question in enumerate(qset['questions']):
-        user_answer = st.session_state.user_answers[i]
-        correct_answer = question['correct_answer']
-        
-        if user_answer == correct_answer:
-            score += 1
-        else:
-            corrections.append({
-                "question": question['text'],
-                "votre réponse": user_answer,
-                "bonne réponse": correct_answer
-            })
-
-    success_rate = (score / len(qset['questions'])) * 100
-    st.success(f"Votre score: {score}/{len(qset['questions'])} ({success_rate:.2f}%)")
-
-    # Display corrections if necessary
-    if corrections:
-        st.subheader("Corrections:")
-        for correction in corrections:
-            with st.container(border=True):
-                st.write(correction['question'])
-                if correction['votre réponse'] == correction['bonne réponse']:
-                    st.success(f"Votre réponse: {correction['votre réponse']}")
-                else:
-                    st.error(f"Votre réponse: {correction['votre réponse']}")
-                    st.success(f"Bonne réponse: {correction['bonne réponse']}")
-
-    # Update the database with the score
-    question_sets_collection.update_one(
-        {"_id": qset['_id']},
-        {"$push": {"completed_by": {"user_id": st.session_state.username, "score": success_rate}}}
-    )
-
-    # Reset for a new quiz
-    if st.button("Retourner à la liste des sets"):
-        del st.session_state.selected_set_id
-        del st.session_state.current_question_index
-        del st.session_state.user_answers
-        st.rerun()
-
-
-
-        
-# Afficher la page des sets de questions si aucune question n'est sélectionnée
-#if 'selected_set_id' not in st.session_state or st.session_state.selected_set_id is None:
-#   display_question_sets_page()
-#else:
-#    start_quiz()
-    
-def display_question_set(qset):
-    st.header(qset['title'])
-    st.write(qset['description'])
-    
-    if st.button("Répondre au set"):
-        start_quiz(qset)
-    
-def display_create_question_set_page():
-    st.title("Créer un Nouveau Set de Questions")
-
-    # Champs pour le titre, la difficulté et la description du set
-    title = st.text_input("Titre du set")
-    difficulty = st.selectbox("Difficulté", ["simple", "moyen", "difficile", "très complexe"])
-    description = st.text_area("Description", max_chars=100)
-
-    # Upload d'image pour la bannière
-    banner_image = st.file_uploader("Télécharger une image pour la bannière", type=['png', 'jpg'], accept_multiple_files=False)
-
-    # Initialisation de l'état des questions si ce n'est pas déjà fait
-    if 'questions' not in st.session_state:
-        st.session_state.questions = []
-
-    # Fonction pour ajouter une nouvelle question
-    def add_question():
-        new_question = {
-            "text": "",
-            "options": ["", "", "", ""],
-            "correct_answer": ""
-        }
-        st.session_state.questions.append(new_question)
-
-    # Bouton pour ajouter une nouvelle question
-    if st.button("Ajouter une question"):
-        add_question()
-
-    # Affichage des questions existantes
-    for idx, question in enumerate(st.session_state.questions):
-        with st.container(border=True):
-            st.subheader(f":blue[Question : {idx + 1}]")
-            question_text = st.text_input(f"Texte de la question {idx + 1}", value=question["text"], key=f"text_{idx}")
-            options = [st.text_input(f"Option {i+1} pour la question {idx + 1}", value=question["options"][i], key=f"option_{idx}_{i}") for i in range(4)]
-            correct_answer = st.selectbox(f"Réponse correcte pour la question {idx + 1}", options, key=f"correct_{idx}")
-
-            # Mise à jour des questions dans l'état
-            st.session_state.questions[idx] = {
-                "text": question_text,
-                "options": options,
-                "correct_answer": correct_answer
-            }
-
-
-            # Bouton pour retirer une question
-            if st.button(f"Retirer la question {idx + 1}", key=f"remove_{idx}"):
-                del st.session_state.questions[idx]
-                st.rerun()
-
-    # Validation du set
-    if st.button("Valider le set"):
-        if len(st.session_state.questions) == 0:
-            st.error("Vous devez ajouter au moins une question avant de valider le set.")
-        elif banner_image:
-            # Upload l'image sur Cloudinary et obtenir l'URL
-            result = cloudinary.uploader.upload(banner_image)
-            banner_image_url = result.get('url')
-
-            create_question_set(title, difficulty, description, st.session_state.questions,
-                                creator_id=st.session_state.username,
-                                creator_username=st.session_state.username,
-                                banner_image_url=banner_image_url)
-
-            st.success("Set créé avec succès!")
-            # Réinitialiser les questions après validation
-            st.session_state.questions.clear()
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
-     
 
 
 
@@ -1026,12 +1052,10 @@ def create_sidebar():
             collapse_sidebar()
         # Nouveaux boutons pour les sets de questions
         st.sidebar.markdown("#### Sets de questions")
-        if st.sidebar.button("🗂️ Sets de Questions", key="question_sets"):
-            st.session_state.page = "Sets de Questions"
-            collapse_sidebar()
-        if st.sidebar.button("➕ Créer un Set", key="create_set"):
-            st.session_state.page = "Créer un Set"
-            collapse_sidebar()
+            
+        if st.sidebar.button("🗂️ Sets de questions", key="QCM Personnalisé"):
+            st.session_state.page = "QCM Personnalisé"
+            collapse_sidebar() 
 
         st.sidebar.markdown("#### Schémas")
         if st.sidebar.button("🖼️ Schémas", key="schemas", on_click=lambda: st.markdown("<script>closeSidebar()</script>", unsafe_allow_html=True)):
@@ -1182,32 +1206,31 @@ def update_user_stats(username, points=0, quizzes_completed=0):
     collection.update_one({"username": username}, {"$inc": {"points": points, "quizzes_completed": quizzes_completed}})
     
     
+    
+    
+def auto_save_schema():
+    # Fonction pour sauvegarder périodiquement le schéma
+    while True:
+        if 'schema_data' in st.session_state:
+            # Sauvegarder les données du schéma en cours
+            save_schema_to_db(st.session_state.schema_data)
+        threading.Event().wait(60)  # Sauvegarde toutes les 60 secondes
+
+def save_schema_to_db(schema_data):
+    # Simuler la sauvegarde dans une base de données
+    # Remplacez ceci par votre logique de sauvegarde réelle
+    print("Schéma sauvegardé:", schema_data)
+    
+    
 def display_add_schema_page():
     st.title("Ajouter un schéma")
     
-    domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
     domain = st.selectbox("Domaine", domains)
     
-    subdomains = {
-        "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
-        "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
-        "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
-        "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
-        "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
-        "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
-        "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
-    }
     subdomain = st.selectbox("Sous-domaine", subdomains[domain])
     
     subsystem = None
     if domain == "Anatomie":
-        subsystems = {
-            "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
-            "Système circulatoire": ["Cœur", "Artères", "Veines"],
-            "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
-            "Système urinaire": ["Reins", "Vessie", "Urètres"],
-            "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
-        }
         subsystem = st.selectbox("Sous-système", subsystems[subdomain])
     
     uploaded_file = st.file_uploader("Choisir une image", type=["png", "jpg", "jpeg"])
@@ -1224,22 +1247,34 @@ def display_add_schema_page():
     title = st.text_input("Titre du schéma")
     st.write("***:red[Pensez à créer au moins une réponse possible avec le bouton 'Ajouter une réponse' en dessous !]***")
     
-    # Initialisation de la liste des éléments dans la session state si elle n'existe pas
     if 'schema_elements' not in st.session_state:
         st.session_state.schema_elements = []
     
-    # Boutons pour ajouter et retirer des fields
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(":green[Ajouter une réponse]"):
-            st.session_state.schema_elements.append("")
-    with col2:
-        if st.button(":red[Retirer une réponse]") and st.session_state.schema_elements:
+    def add_field():
+        st.session_state.schema_elements.append("")
+    
+    def remove_field():
+        if st.session_state.schema_elements:
             st.session_state.schema_elements.pop()
     
-    # Affichage et gestion des fields
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button(":green[Ajouter une réponse]", on_click=add_field)
+    with col2:
+        st.button(":red[Retirer une réponse]", on_click=remove_field)
+    
     for i, element in enumerate(st.session_state.schema_elements):
         st.session_state.schema_elements[i] = st.text_input(f"Élément {i+1} :", value=element, key=f"element_{i}")
+    
+    # Sauvegarder l'état actuel du schéma dans session_state pour la sauvegarde automatique
+    st.session_state.schema_data = {
+        'domain': domain,
+        'subdomain': subdomain,
+        'subsystem': subsystem,
+        'title': title,
+        'elements': st.session_state.schema_elements,
+        'file_details': file_details if uploaded_file else None
+    }
     
     if st.button("Soumettre le schéma"):
         if uploaded_file and title and st.session_state.schema_elements:
@@ -1250,41 +1285,30 @@ def display_add_schema_page():
                 save_schema_data(schema_data, st.session_state.schema_elements)
                 st.success("Schéma ajouté avec succès !")
                 # Réinitialiser les éléments après la soumission
+                del st.session_state['schema_data']
                 st.session_state.schema_elements = []
             else:
                 st.error("Erreur lors de l'upload du schéma.")
         else:
             st.error("Veuillez remplir tous les champs et uploader une image.")
+
+# Démarrer le thread de sauvegarde automatique si ce n'est pas déjà fait
+
+               
+               
+               
                
 def display_schemas_page():
     st.title("Schémas")
     
     # Champ de recherche
     search_query = st.text_input("Rechercher un schéma")
-    
-    domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
     domain = st.selectbox("Domaine", domains)
     
-    subdomains = {
-        "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
-        "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
-        "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
-        "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
-        "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
-        "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
-        "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
-    }
     subdomain = st.selectbox("Sous-domaine", subdomains[domain])
     
     subsystem = None
     if domain == "Anatomie":
-        subsystems = {
-            "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
-            "Système circulatoire": ["Cœur", "Artères", "Veines"],
-            "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
-            "Système urinaire": ["Reins", "Vessie", "Urètres"],
-            "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
-        }
         subsystem = st.selectbox("Sous-système", subsystems[subdomain])
     
     schemas = load_schemas()
@@ -1795,15 +1819,10 @@ def main():
      
      
      
-    if choice == "Sets de Questions":
-        if 'selected_set_id' in st.session_state and st.session_state.selected_set_id is not None:
-         start_quiz()
-        else:
-         display_question_sets_page()
+
         
         
-    elif choice == "Créer un Set":
-        display_create_question_set_page()
+
      
     elif choice == "Schémas":
      display_help_button("Schémas", "content")
@@ -1820,29 +1839,13 @@ def main():
     elif choice == "Qcm":
         display_help_button("Qcm")
         st.subheader("Qcm")
-        domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
         selected_domain = st.selectbox("__Qu'est-ce que vous souhaitez réviser ?__", domains)
 
-        subdomains = {
-            "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
-            "Physiologie": ["Physiologie fondamentale", "Physiologie appliquée", "Physiopathologie"],
-            "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
-            "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
-            "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
-            "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
-            "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
-        }
 
         selected_subdomain = st.selectbox("Choisissez un sous-domaine", subdomains[selected_domain])
 
         if selected_domain == "Anatomie":
-            subsystems = {
-                "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
-                "Système circulatoire": ["Cœur", "Artères", "Veines"],
-                "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
-                "Système urinaire": ["Reins", "Vessie", "Urètres"],
-                "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
-            }
+
             selected_subsystem = st.selectbox("Choisissez un sous-système", subsystems[selected_subdomain])
         else:
             selected_subsystem = None
@@ -2071,7 +2074,8 @@ def main():
                 })
 
 
-
+    if choice == "QCM Personnalisé":
+        display_custom_qcm_page()
 
     elif choice == "Todolist":
         display_todolist_page()
@@ -2156,29 +2160,11 @@ def main():
         st.warning("Vous devez être connecté pour pouvoir créer une question.")
     
       else:
-        domains = ["Anatomie", "Physiologie", "Chimie/Biochimie", "Mathématiques et arithmétique", "Hygiène", "Pharmacologie", "Psychologie"]
         domain = st.selectbox("Domaine", domains)
-        
-        subdomains = {
-            "Anatomie": ["Système osseux", "Système circulatoire", "Système nerveux", "Système urinaire", "Système respiratoire"],
-            "Physiologie": ["Système cardiovasculaire", "Système respiratoire", "Système digestif"],
-            "Chimie/Biochimie": ["Chimie organique", "Biochimie structurale", "Métabolisme"],
-            "Mathématiques et arithmétique": ["Algèbre", "Géométrie", "Statistiques"],
-            "Hygiène": ["Hygiène personnelle", "Hygiène alimentaire", "Hygiène environnementale"],
-            "Pharmacologie": ["Pharmacocinétique", "Pharmacodynamique", "Classes de médicaments"],
-            "Psychologie": ["Psychologie cognitive", "Psychologie sociale", "Psychopathologie"]
-        }
         
         subdomain = st.selectbox("Sous-domaine", subdomains[domain])
         
         if domain == "Anatomie":
-            subsystems = {
-                "Système osseux": ["Crâne", "Colonne vertébrale", "Membres supérieurs", "Membres inférieurs"],
-                "Système circulatoire": ["Cœur", "Artères", "Veines"],
-                "Système nerveux": ["Cerveau", "Moelle épinière", "Nerfs périphériques"],
-                "Système urinaire": ["Reins", "Vessie", "Urètres"],
-                "Système respiratoire": ["Poumons", "Trachée", "Bronches"]
-            }
             subsystem = st.selectbox("Sous-système", subsystems[subdomain])
         else:
             subsystem = None
