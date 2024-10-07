@@ -1322,7 +1322,7 @@ def display_schemas_page():
         st.info("Aucun schéma disponible pour cette sélection.")
     else:
         # Pagination
-        items_per_page = 3
+        items_per_page = 1
         num_pages = (len(filtered_schemas) - 1) // items_per_page + 1
         page = st.number_input("Page", min_value=1, max_value=num_pages, value=1)
         start_idx = (page - 1) * items_per_page
