@@ -1,6 +1,3 @@
-Voici un exemple de fichier README bien structuré et détaillé pour votre projet Streamlit, avec des sections claires et des emojis pour le rendre attrayant :
-
-```markdown
 # 📚 Learn par Impulsar
 
 Bienvenue sur **Learn par Impulsar**, une plateforme d'apprentissage collaboratif dans le domaine de la santé. Ce projet utilise **Streamlit** pour créer une interface interactive permettant aux utilisateurs de réviser ensemble, créer des quiz communautaires et partager des ressources.
@@ -67,8 +64,3 @@ Les contributions sont les bienvenues ! Pour contribuer :
 ## 📧 Contact
 
 Pour toute question ou suggestion, n'hésitez pas à me contacter via [Instagram](https://www.instagram.com/maxx.abrt/).
-
----
-
-Ce modèle peut être adapté selon les spécificités supplémentaires de votre projet ou vos préférences personnelles.
-```
