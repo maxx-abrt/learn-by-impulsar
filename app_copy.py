@@ -23,7 +23,7 @@ load_dotenv()
 
 
 def keep_alive():
-    url = "https://learn.impulsarstudios.xyz"  # Remplacez par l'URL de votre application
+    url = "https://learn.impulsarstudios.xyz"  
     while True:
         try:
             response = requests.get(url)
@@ -114,13 +114,13 @@ def get_user_data(username):
     return users_collection.find_one({"username": username})
 
 
-# Assurez-vous que 'db' est défini avant d'utiliser des collections
+
 collection_name = 'users'
 try:
     collection = db[collection_name]
 except NameError:
     st.error("La base de données n'est pas définie correctement.")
-# Create a new collection for storing user interactions
+
 
 
 def get_session_id():
@@ -131,7 +131,7 @@ def get_session_id():
     
         
 def manage_session():
-    # Assurez-vous que le session_id est initialisé
+
     get_session_id()
     
     session_duration = 15  # Durée d'expiration de la session en minutes
